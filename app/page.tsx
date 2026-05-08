@@ -68,6 +68,7 @@ function layerPathExample(index: number): string {
 
 export default function Home() {
   const queryRef = useRef<HTMLTextAreaElement | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
   const [query, setQuery] = useState("");
   const [source, setSource] = useState<ChatSource>("openai");
   const [sourceModels, setSourceModels] = useState<SourceModelState>({
@@ -232,6 +233,7 @@ export default function Home() {
           <h1 className="text-2xl font-semibold text-center">Let's go deeper</h1>
 
           <form
+            ref={formRef}
             onSubmit={handleSubmit}
             className="space-y-4 rounded-lg border border-muted bg-card p-4"
           >
@@ -358,6 +360,24 @@ export default function Home() {
                   id="query"
                   value={query}
                   onChange={(event) => handleQueryChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    // Submit the form when Enter is pressed without Shift.
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      // Prevent inserting a newline.
+                      event.preventDefault();
+                      // Use requestSubmit if available to trigger form validation and onSubmit.
+                      if (formRef.current) {
+                        // requestSubmit is preferred because it triggers the form's submit event
+                        // and respects the type="submit" button behavior.
+                        if (typeof formRef.current.requestSubmit === "function") {
+                          formRef.current.requestSubmit();
+                        } else {
+                          // Fallback for older browsers.
+                          formRef.current.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+                        }
+                      }
+                    }
+                  }}
                   className="min-h-20 w-full resize-none overflow-hidden rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                   placeholder="Ask your question..."
                   required
