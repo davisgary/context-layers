@@ -12,8 +12,15 @@ export type LayerPathInput = {
   label?: string;
 };
 
-const LAYERS_DIR = path.join(process.cwd(), "layers");
-const USER_HOME_DIR = path.resolve(os.homedir());
+function getLayersDir(): string {
+  // compute on demand to avoid filesystem/path operations at module import time
+  return path.join(/*turbopackIgnore: true*/ process.cwd(), "layers");
+}
+
+function getUserHomeDir(): string {
+  // return the user's home directory when needed (avoid top-level os calls)
+  return os.homedir();
+}
 
 export async function loadLayerContext(
   selectedLayers?: LayerPathInput[]
@@ -25,7 +32,7 @@ export async function loadLayerContext(
   let entries: string[] = [];
 
   try {
-    entries = await fs.readdir(LAYERS_DIR);
+  entries = await fs.readdir(getLayersDir());
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") {
@@ -40,7 +47,7 @@ export async function loadLayerContext(
 
   const contexts = await Promise.all(
     markdownFiles.map(async (fileName) => {
-      const fullPath = path.join(LAYERS_DIR, fileName);
+  const fullPath = path.join(getLayersDir(), fileName);
       const content = await fs.readFile(fullPath, "utf8");
       return {
         name: fileName,
@@ -143,7 +150,7 @@ async function resolveLayerPath(layerPath: string): Promise<string> {
     if (absoluteMatch) return absoluteMatch;
 
     const correctedHomeAbsolute = path.resolve(
-      USER_HOME_DIR,
+      getUserHomeDir(),
       absolutePath.slice(1)
     );
     const correctedMatch = await tryWithGithubVariants(correctedHomeAbsolute);
@@ -173,7 +180,7 @@ async function resolveLayerPath(layerPath: string): Promise<string> {
   }
 
   if (normalizedInput.startsWith("./") || normalizedInput.startsWith("../")) {
-    const projectRelativePath = path.resolve(process.cwd(), pathWithTilde);
+  const projectRelativePath = path.resolve(/*turbopackIgnore: true*/ process.cwd(), pathWithTilde);
     const projectRelativeMatch = await tryWithGithubVariants(projectRelativePath);
     if (projectRelativeMatch) return projectRelativeMatch;
 
@@ -186,11 +193,11 @@ async function resolveLayerPath(layerPath: string): Promise<string> {
     throw buildNotFoundError(layerPath, attempted);
   }
 
-  const layersRelativePath = path.resolve(LAYERS_DIR, pathWithTilde);
+  const layersRelativePath = path.resolve(/*turbopackIgnore: true*/ getLayersDir(), pathWithTilde);
   const layersMatch = await tryWithGithubVariants(layersRelativePath);
   if (layersMatch) return layersMatch;
 
-  const homeRelativePath = path.resolve(USER_HOME_DIR, pathWithTilde);
+  const homeRelativePath = path.resolve(/*turbopackIgnore: true*/ getUserHomeDir(), pathWithTilde);
   const homeMatch = await tryWithGithubVariants(homeRelativePath);
   if (homeMatch) return homeMatch;
 
@@ -209,11 +216,11 @@ function normalizeInputPath(inputPath: string): string {
 
 function expandHomePath(inputPath: string): string {
   if (inputPath === "~") {
-    return USER_HOME_DIR;
+    return getUserHomeDir();
   }
 
   if (inputPath.startsWith(`~${path.sep}`)) {
-    return path.join(USER_HOME_DIR, inputPath.slice(2));
+    return path.join(/*turbopackIgnore: true*/ getUserHomeDir(), inputPath.slice(2));
   }
 
   return inputPath;
@@ -257,8 +264,8 @@ async function findByFileNameInGithubDirs(
   }
 
   const roots = [
-    path.join(USER_HOME_DIR, "Documents", "GitHub"),
-    path.join(USER_HOME_DIR, "Documents", "github"),
+    path.join(/*turbopackIgnore: true*/ getUserHomeDir(), "Documents", "GitHub"),
+    path.join(/*turbopackIgnore: true*/ getUserHomeDir(), "Documents", "github"),
   ];
 
   for (const root of roots) {
