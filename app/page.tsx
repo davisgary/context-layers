@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { FiArrowUp, FiPlus, FiMinusCircle, FiChevronDown } from "react-icons/fi";
+import { FiArrowUp, FiPlus, FiMinusCircle, FiChevronDown, FiLoader } from "react-icons/fi";
 import Footer from "../components/Footer";
 
 type LayerInput = {
@@ -388,9 +388,14 @@ export default function Home() {
                   disabled={isLoading}
                   title="Submit"
                   aria-label="Submit"
+                  aria-busy={isLoading}
                   className="mb-1 absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-60"
                 >
-                  <FiArrowUp className="h-4 w-4" />
+                  {isLoading ? (
+                    <FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <FiArrowUp className="h-4 w-4" />
+                  )}
                 </button>
               </div>
             </div>
