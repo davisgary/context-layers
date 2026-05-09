@@ -6,7 +6,7 @@ Layers provides LLMs with ordered context for each request, producing deeper, mo
 
 ## Key concepts
 
-- Context layer: a piece of text or document loaded from a file or folder that is appended (or otherwise provided) as context to every model query.
+ - Context layer: a piece of text or document loaded from a file or folder that is provided as context to every model query. Unlike many ChatGPT and Claude-style workflows that dump raw files and rely on the model to decide what to use, Layers intentionally supplies curated, structured context. Users explicitly enable and order layers (priority is preserved). Content can be preprocessed (summarized, chunked, or sanitized) before being attached so the model receives predictable, prioritized instructions and information — improving reliability, reproducibility, and control compared with leaving selection up to the LLM.
 - Local-first: Layers can be pulled from files inside this project (for example the `layers/` dir) or from any folder on your machine by entering a path in the UI.
 - Model selection: the frontend UI exposes model selection; the selected model and API key(s) are configured via environment variables.
 - Providers: this project supports OpenAI (OpenAI API), Anthropic Claude (Claude API), and Ollama for running local models.
@@ -79,6 +79,17 @@ npm run dev
 - `app/` — App Router pages including the layer UI and chat flows where users enter and manage paths.
 - `pages/` — legacy Pages Router pages; the app uses a hybrid approach so some routes remain here.
 - `lib/` — utilities for auth, session, and file reading.
-- `layers/` — recommended place to put reusable `.md or .mdx` files for use as context layers.
+- `layers/` — recommended place to put reusable files for use as context layers.
+
+## Roadmap & Todos
+
+- [ ] Production build with third-party OAuth for LLM integrations. Implement secure per-user OAuth flows so individual users can sign in with their own LLM provider account (do not rely on API keys in env for user access).
+- [ ] Integrate auth — implement user authentication and session management.
+- [ ] Integrate DB — add Postgres (Neon) for users, layers, sessions, and provider tokens.
+- [ ] Make editable .md files — provide an in-app editor to create and edit Markdown layers, and persist edits (either to filesystem or DB-backed storage) with versioning or save history.
+- [ ] Scrape link function — implement URL fetching + parsing to turn a web page into one or more layers (fetch HTML, extract main content, convert to Markdown, sanitize), and add UI to import a URL.
+- [ ] Follow-up suggestions — after each model response, generate suggested follow-up prompts or actions (brief & contextual) to help iterate with the model.
+- [ ] Simplifying fills to improve efficiency and reduce tokens — optimize prompt templates and layer concatenation (summarize long layers, use templates, or chunk+retrieve) to lower token use while preserving signal.
+- [ ] Templates for different topics — create a set of starter `.md` templates in `layers/` (e.g., knowledge topics, code review, project brief, persona) that users can quickly enable and customize.
 
 ---
