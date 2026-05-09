@@ -28,7 +28,7 @@ Keep secrets out of source control. If the repo already contains an example file
 
 ## Recommended files & structure for layers
 
-- Recommended file format: use Markdown (`.md`) for skill guides, role instructions, personas, and any structured context you want the model to follow. Markdown is readable and easy to author.
+- Recommended file formats: prefer text-based formats such as Markdown (`.md`), MDX (`.mdx`), HTML (`.html`), or plain text (`.txt`) for skill guides, role instructions, personas, and any structured context you want the model to follow. These formats are human-readable, easy to author, and simple to preprocess (summarize, sanitize, or chunk) before they're attached to model prompts.
 - Project folder: keep reusable layers inside the `layers/` directory (already present in this repo). That makes it easy to commit templates and share them across your local sessions.
 - Local folders: you may also point the app at absolute paths anywhere on your machine. When running locally this is convenient for temporary or private context layers.
 
