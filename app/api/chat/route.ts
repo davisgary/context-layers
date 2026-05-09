@@ -35,14 +35,53 @@ export async function POST(request: Request) {
     const prompt = buildLayeredPrompt(query, contexts);
     const answer = await generateAnswer(source, prompt, model);
 
-    if (!answer) {
+    let finalAnswer = answer;
+
+    if (!finalAnswer) {
       return NextResponse.json(
         { error: "Model returned an empty response." },
         { status: 502 }
       );
     }
 
-    return NextResponse.json({ answer, source, model });
+    // Ensure the returned answer includes Markdown headings for Results.
+    // If the model didn't include a top-level '## Results' heading, prepend a simple scaffold
+    // so clients that expect Markdown can render consistently.
+    const hasResultsHeading = /(^|\n)#{1,6}\s*Results\b/i.test(finalAnswer);
+    const hasSectionOne = /(^|\n)#{1,6}\s*1\)\s*Concise summary\b/i.test(finalAnswer) || /##\s*1\)/i.test(finalAnswer);
+
+    if (!hasResultsHeading) {
+      let scaffold = "## Results\n\n";
+      if (!hasSectionOne) {
+        scaffold += "## 1) Concise summary\n\n";
+      }
+      finalAnswer = scaffold + finalAnswer.trim();
+    }
+
+    // Normalize Markdown spacing for readability while avoiding changes inside fenced code blocks.
+    function normalizeMarkdownSpacing(md: string): string {
+      if (!md) return md;
+      // Split on fenced code blocks so we don't alter their contents.
+      const parts = md.split(/(```[\s\S]*?```)/g);
+      for (let i = 0; i < parts.length; i++) {
+        // Only transform outside code blocks (even indices)
+        if (i % 2 === 0) {
+          let text = parts[i];
+          // Ensure at least one blank line before any heading (if not start of document)
+          text = text.replace(/([^\n])\n(#{1,6}\s)/g, "$1\n\n$2");
+          // Ensure a blank line after each heading
+          text = text.replace(/(#{1,6}[^\n]*)\n(?!\n|$)/g, "$1\n\n");
+          // Collapse 3+ newlines into exactly two for consistent paragraph spacing
+          text = text.replace(/\n{3,}/g, "\n\n");
+          parts[i] = text;
+        }
+      }
+      return parts.join("");
+    }
+
+    finalAnswer = normalizeMarkdownSpacing(finalAnswer);
+
+    return NextResponse.json({ answer: finalAnswer, source, model });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unexpected server error.";

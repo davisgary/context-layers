@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { FiArrowUp, FiPlus, FiMinusCircle, FiChevronDown } from "react-icons/fi";
 import Footer from "../components/Footer";
 
@@ -402,9 +403,11 @@ export default function Home() {
           ) : null}
 
           {answer ? (
-            <div className="space-y-2 rounded-lg border border-muted bg-card p-4">
+            <div className="space-y-4 rounded-lg border border-muted bg-card p-6">
               <h2 className="text-sm font-medium">Answer</h2>
-              <p className="whitespace-pre-wrap text-sm">{answer}</p>
+              <div className="prose max-w-none text-sm break-words">
+                <ReactMarkdown>{answer}</ReactMarkdown>
+              </div>
             </div>
           ) : null}
         </div>

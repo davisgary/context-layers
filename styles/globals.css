@@ -51,3 +51,53 @@
     font-family: 'Instrument Sans', sans-serif;
   }
 }
+
+/* Ensure Tailwind Typography (.prose) uses the app's text color so Markdown matches the rest of the UI. */
+@layer components {
+  .prose {
+    color: inherit;
+  }
+
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4,
+  .prose h5,
+  .prose h6,
+  .prose p,
+  .prose li,
+  .prose blockquote,
+  .prose pre,
+  .prose code,
+  .prose table,
+  .prose thead,
+  .prose tbody,
+  .prose th,
+  .prose td {
+    color: inherit;
+  }
+
+  /* Ensure bold/strong text uses the same color as surrounding text */
+  .prose strong,
+  .prose b {
+    color: inherit;
+  }
+
+  /* Make ordered list markers (numbers) inherit the app color and match weight */
+  .prose ol li,
+  .prose ul li {
+    color: inherit;
+  }
+
+  .prose ol li::marker,
+  .prose ul li::marker {
+    color: inherit;
+    font-weight: inherit;
+  }
+
+  /* Links should inherit color but remain identifiable */
+  .prose a {
+    color: inherit;
+    text-decoration: underline;
+  }
+}
