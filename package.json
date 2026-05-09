@@ -11,7 +11,7 @@
   "dependencies": {
     "@auth/neon-adapter": "^1.9.1",
     "@neondatabase/serverless": "^1.0.0",
-    "next": "^16.1.6",
+    "next": "^16.2.6",
     "next-auth": "^4.24.13",
     "openai": "^6.21.0",
     "react": "^19.2.4",
