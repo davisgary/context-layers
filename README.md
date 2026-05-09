@@ -90,6 +90,7 @@ npm run dev
 - [ ] Scrape link function — implement URL fetching + parsing to turn a web page into one or more layers (fetch HTML, extract main content, convert to Markdown, sanitize), and add UI to import a URL.
 - [ ] Follow-up suggestions — after each model response, generate suggested follow-up prompts or actions (brief & contextual) to help iterate with the model.
 - [ ] Simplifying fills to improve efficiency and reduce tokens — optimize prompt templates and layer concatenation (summarize long layers, use templates, or chunk+retrieve) to lower token use while preserving signal.
+- [ ] Add caching for processed layers — cache preprocessed layer content (summaries, embeddings, or canonicalized chunks) with a TTL and simple invalidation to avoid re-reading and re-tokenizing unchanged files; this will reduce latency, API token usage, and server load.
 - [ ] Templates for different topics — create a set of starter `.md` templates in `layers/` (e.g., knowledge topics, code review, project brief, persona) that users can quickly enable and customize.
 
 ---
