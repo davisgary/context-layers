@@ -277,7 +277,7 @@ export default function Home() {
                       disabled={layers.length <= 1}
                       title="Delete layer"
                       aria-label="Delete layer"
-                      className="inline-flex items-center gap-2 rounded-md font-normal text-sm text-destructive px-2 py-2"
+                      className="inline-flex items-center gap-2 rounded-md font-normal text-sm text-destructive px-2 py-2 cursor-pointer disabled:cursor-not-allowed transition-colors duration-300 ease-in-out hover:text-destructive/80 disabled:hover:text-destructive"
                     >
                       <FiMinusCircle />
                       Remove
@@ -289,7 +289,7 @@ export default function Home() {
                     type="button"
                     onClick={addLayer}
                     disabled={layers.length >= 6}
-                    className="inline-flex items-center gap-2 rounded-md border border-muted px-2 pr-3 py-1.5 text-xs font-medium hover:bg-muted"
+                    className="inline-flex items-center gap-2 rounded-md border border-muted px-2 pr-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors duration-300 ease-in-out hover:text-foreground"
                   >
                     <FiPlus className="h-4 w-4" />
                     Add layer
@@ -389,7 +389,12 @@ export default function Home() {
                   title="Submit"
                   aria-label="Submit"
                   aria-busy={isLoading}
-                  className="mb-1 absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-60"
+                  className={
+                    `mb-1 absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-60 transition-colors duration-300 ease-in-out` +
+                    (query.trim().length > 0
+                      ? " hover:bg-primary/90 cursor-pointer"
+                      : " cursor-default")
+                  }
                 >
                   {isLoading ? (
                     <FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -410,7 +415,7 @@ export default function Home() {
           {answer ? (
             <div className="space-y-4 rounded-lg border border-muted bg-card p-6">
               <h2 className="text-sm font-medium">Answer</h2>
-              <div className="prose max-w-none text-sm break-words">
+              <div className="prose max-w-none text-base break-words">
                 <ReactMarkdown>{answer}</ReactMarkdown>
               </div>
             </div>
