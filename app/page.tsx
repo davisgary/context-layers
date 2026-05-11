@@ -414,7 +414,6 @@ export default function Home() {
 
           {answer ? (
             <div className="space-y-4 rounded-lg border border-muted bg-card p-6">
-              <h2 className="text-sm font-medium">Answer</h2>
               <div className="prose max-w-none text-base break-words">
                 <ReactMarkdown>{answer}</ReactMarkdown>
               </div>

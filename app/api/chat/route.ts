@@ -44,19 +44,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // Ensure the returned answer includes Markdown headings for Results.
-    // If the model didn't include a top-level '## Results' heading, prepend a simple scaffold
-    // so clients that expect Markdown can render consistently.
-    const hasResultsHeading = /(^|\n)#{1,6}\s*Results\b/i.test(finalAnswer);
-    const hasSectionOne = /(^|\n)#{1,6}\s*1\)\s*Concise summary\b/i.test(finalAnswer) || /##\s*1\)/i.test(finalAnswer);
-
-    if (!hasResultsHeading) {
-      let scaffold = "## Results\n\n";
-      if (!hasSectionOne) {
-        scaffold += "## 1) Concise summary\n\n";
-      }
-      finalAnswer = scaffold + finalAnswer.trim();
-    }
+    // Do not force or prepend any top-level headings; respect the model's original output.
 
     // Normalize Markdown spacing for readability while avoiding changes inside fenced code blocks.
     function normalizeMarkdownSpacing(md: string): string {
