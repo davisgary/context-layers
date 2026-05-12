@@ -62,7 +62,7 @@ function layerName(index: number): string {
   return `Layer ${index + 1}`;
 }
 
-function layerPathExample(index: number): string {
+function layerPathExample(_index: number): string {
   // Generic example placeholder
   return "Documents/github/repo/SKILL.md";
 }
@@ -88,6 +88,7 @@ export default function Home() {
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState("");
 
   function addLayer() {
     setLayers((prev) => [...prev, { path: "", label: "" }]);
@@ -216,6 +217,35 @@ export default function Home() {
       setIsLoading(false);
     }
   }
+
+  useEffect(() => {
+    // Loading messages
+    const messages = [
+      "Getting layer data...",
+      "Summarizing context...",
+      "Retrieving answer...",
+    ];
+    let t1: number | undefined;
+    let t2: number | undefined;
+    if (isLoading) {
+      // Start with the first message immediately.
+      setLoadingText(messages[0]);
+      // Second message.
+      t1 = window.setTimeout(() => {
+        setLoadingText(messages[1]);
+      }, 3000);
+      // Final message.
+      t2 = window.setTimeout(() => {
+        setLoadingText(messages[2]);
+      }, 6000);
+    } else {
+      setLoadingText("");
+    }
+    return () => {
+      if (typeof t1 !== "undefined") clearTimeout(t1);
+      if (typeof t2 !== "undefined") clearTimeout(t2);
+    };
+  }, [isLoading]);
 
   function handleQueryChange(value: string) {
     setQuery(value);
@@ -403,6 +433,12 @@ export default function Home() {
                   )}
                 </button>
               </div>
+              {isLoading && loadingText ? (
+                <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                  <FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  {loadingText}
+                </p>
+              ) : null}
             </div>
           </form>
 
