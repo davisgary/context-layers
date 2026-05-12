@@ -83,6 +83,7 @@ npm run dev
 
 ## Roadmap & Todos
 
+ - [ ] Stream answers — implement streaming model responses so the frontend can render partial output as it's produced, improving response time.
 - [ ] Production build with third-party OAuth for LLM integrations. Implement secure per-user OAuth flows so individual users can sign in with their own LLM provider account (do not rely on API keys in env for user access).
 - [ ] Integrate auth — implement user authentication and session management.
 - [ ] Integrate DB — add Postgres (Neon) for users, layers, sessions, and provider tokens.
