@@ -14,8 +14,8 @@ export default function Header() {
         className="max-w-6xl mx-auto flex items-center justify-between p-4"
         aria-label="Primary Navigation"
       >
-        <Link href="/" className="text-muted text-xs tracking-tight cursor-pointer hover:opacity-80 transition-opacity duration-300">
-          Hi
+        <Link href="/" className="font-semibold tracking-tight cursor-pointer hover:opacity-80 transition-opacity duration-300">
+          Layers
         </Link>
         <div className="flex gap-4 items-center">
           {session?.user ? (
