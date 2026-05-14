@@ -25,6 +25,17 @@ function getUserHomeDir(): string {
 export async function loadLayerContext(
   selectedLayers?: LayerPathInput[]
 ): Promise<LayerContextFile[]> {
+  // Simple in-memory cache for active server instance to avoid repeated disk I/O
+  // Keyed by JSON.stringify of selectedLayers (or "__all__" for all layers)
+  // Cache is intentionally small and not persisted across restarts.
+  const cacheKey = selectedLayers && selectedLayers.length > 0 ? `sel:${JSON.stringify(selectedLayers.map(l=>l.path))}` : "__all__";
+  // @ts-ignore - attach cache to function to keep module-level state minimal
+  const cache: Map<string, LayerContextFile[]> = (loadLayerContext as any).cache || new Map();
+  (loadLayerContext as any).cache = cache;
+
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey) || [];
+  }
   if (selectedLayers && selectedLayers.length > 0) {
     return loadSelectedLayers(selectedLayers);
   }
