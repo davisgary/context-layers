@@ -28,7 +28,8 @@ async function fetchOllamaModels(baseUrl: string, apiKey?: string) {
 async function fetchOpenAIModels(apiKey?: string) {
   if (!apiKey) return [];
   try {
-    const client = new OpenAI({ apiKey });
+    const { getOpenAIClient } = await import("@/lib/openai-client");
+    const client = getOpenAIClient();
     const res = await client.models.list();
     // response.data is an array of model objects
     if (Array.isArray(res.data)) {

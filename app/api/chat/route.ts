@@ -158,17 +158,10 @@ async function generateWithOpenAI(
   prompt: string,
   model: string
 ): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Missing OpenAI API key.");
-  }
-
-  const client = new OpenAI({ apiKey });
-  const response = await client.responses.create({
-    model,
-    input: prompt,
-  });
-
+  // Use a shared OpenAI client to avoid per-request construction overhead.
+  const { getOpenAIClient } = await import("@/lib/openai-client");
+  const client = getOpenAIClient();
+  const response = await client.responses.create({ model, input: prompt });
   return response.output_text?.trim() || "";
 }
 
