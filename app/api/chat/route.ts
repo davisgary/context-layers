@@ -55,6 +55,13 @@ export async function POST(request: Request) {
         // Only transform outside code blocks (even indices)
         if (i % 2 === 0) {
           let text = parts[i];
+          // Fix inline markdown tables that arrived on a single line.
+          // Turns "| a | b | | c | d |" into proper multi-line rows.
+          text = text.replace(/\s\|\s\|\s(?=\S)/g, " |\n| ");
+          // Ensure a blank line before table rows for proper Markdown parsing.
+          text = text.replace(/([^\n])\n(\|[^\n]*\|)/g, "$1\n\n$2");
+          // Ensure a blank line after tables when followed by text.
+          text = text.replace(/(\|[^\n]*\|)\n(?!\n|\|)/g, "$1\n\n");
           // Ensure at least one blank line before any heading (if not start of document)
           text = text.replace(/([^\n])\n(#{1,6}\s)/g, "$1\n\n$2");
           // Ensure a blank line after each heading
