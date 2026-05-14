@@ -58,6 +58,8 @@ export async function POST(request: Request) {
           // Fix inline markdown tables that arrived on a single line.
           // Turns "| a | b | | c | d |" into proper multi-line rows.
           text = text.replace(/\s\|\s\|\s(?=\S)/g, " |\n| ");
+          // Remove blank lines inside tables (tables should be contiguous).
+          text = text.replace(/(\|[^\n]*\|)\n\n(?=\|)/g, "$1\n");
           // Ensure a blank line before table rows for proper Markdown parsing.
           text = text.replace(/([^\n])\n(\|[^\n]*\|)/g, "$1\n\n$2");
           // Ensure a blank line after tables when followed by text.
