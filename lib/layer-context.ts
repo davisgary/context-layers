@@ -37,7 +37,9 @@ export async function loadLayerContext(
     return cache.get(cacheKey) || [];
   }
   if (selectedLayers && selectedLayers.length > 0) {
-    return loadSelectedLayers(selectedLayers);
+    const contexts = await loadSelectedLayers(selectedLayers);
+    cache.set(cacheKey, contexts);
+    return contexts;
   }
 
   let entries: string[] = [];
@@ -67,7 +69,9 @@ export async function loadLayerContext(
     })
   );
 
-  return contexts.filter((context) => context.content.length > 0);
+  const filtered = contexts.filter((context) => context.content.length > 0);
+  cache.set(cacheKey, filtered);
+  return filtered;
 }
 
 export function buildLayeredPrompt(
