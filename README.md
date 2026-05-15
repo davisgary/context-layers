@@ -1,6 +1,6 @@
 # Layers
 
-Layers provides LLMs with ordered context for each request, producing deeper, more context-aware responses based on user data. From the frontend, pick a model and it will attach the layers to every request from the file paths you enter.
+Layers provides LLMs with layered context memory for each request, producing deeper, more context-aware responses based on user data. From the frontend, pick a model and it will attach the layers to every request from the file paths you enter.
 
 > Note: This repository is currently intended to run locally. Environment variables in a local env file control which models and API keys are available to the frontend and server.
 
