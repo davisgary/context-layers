@@ -8,6 +8,50 @@ import {
 
 type ChatSource = "openai" | "claude" | "ollama";
 
+const RESPONSE_CACHE_TTL_MS = 2 * 60 * 1000;
+const RESPONSE_CACHE_MAX = 100;
+const responseCache = new Map<
+  string,
+  { answer: string; expiresAt: number }
+>();
+
+function buildResponseCacheKey(
+  source: ChatSource,
+  model: string,
+  query: string,
+  layers?: LayerPathInput[]
+): string {
+  const layerKey = layers?.map((layer) => ({
+    path: layer.path,
+    label: layer.label,
+  }));
+  return JSON.stringify({ source, model, query, layers: layerKey || [] });
+}
+
+function getCachedAnswer(cacheKey: string): string | null {
+  const cached = responseCache.get(cacheKey);
+  if (!cached) return null;
+  if (Date.now() > cached.expiresAt) {
+    responseCache.delete(cacheKey);
+    return null;
+  }
+  return cached.answer;
+}
+
+function setCachedAnswer(cacheKey: string, answer: string): void {
+  responseCache.set(cacheKey, {
+    answer,
+    expiresAt: Date.now() + RESPONSE_CACHE_TTL_MS,
+  });
+
+  if (responseCache.size > RESPONSE_CACHE_MAX) {
+    const oldestKey = responseCache.keys().next().value as string | undefined;
+    if (oldestKey) {
+      responseCache.delete(oldestKey);
+    }
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
@@ -31,6 +75,11 @@ export async function POST(request: Request) {
     const source = parseSource(body.source);
     const model = parseRequiredModel(body.model);
     const layerInputs = parseLayerInputs(body.layers);
+    const cacheKey = buildResponseCacheKey(source, model, query, layerInputs);
+    const cachedAnswer = getCachedAnswer(cacheKey);
+    if (cachedAnswer) {
+      return NextResponse.json({ answer: cachedAnswer, source, model });
+    }
     const contexts = await loadLayerContext(layerInputs);
     const prompt = buildLayeredPrompt(query, contexts);
     const answer = await generateAnswer(source, prompt, model);
@@ -79,6 +128,8 @@ export async function POST(request: Request) {
     }
 
     finalAnswer = normalizeMarkdownSpacing(finalAnswer);
+
+  setCachedAnswer(cacheKey, finalAnswer);
 
     return NextResponse.json({ answer: finalAnswer, source, model });
   } catch (error) {
