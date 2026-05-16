@@ -12,6 +12,20 @@ export type LayerPathInput = {
   label?: string;
 };
 
+type LayerCacheEntry = {
+  contexts: LayerContextFile[];
+  signature: string;
+  expiresAt: number;
+};
+
+type ResolvedLayer = {
+  input: LayerPathInput;
+  resolvedPath: string;
+};
+
+const LAYER_CACHE_TTL_MS = 5 * 60 * 1000;
+const LAYER_CACHE_MAX = 50;
+
 function getLayersDir(): string {
   // compute on demand to avoid filesystem/path operations at module import time
   return path.join(/*turbopackIgnore: true*/ process.cwd(), "layers");
@@ -25,20 +39,21 @@ function getUserHomeDir(): string {
 export async function loadLayerContext(
   selectedLayers?: LayerPathInput[]
 ): Promise<LayerContextFile[]> {
-  // Simple in-memory cache for active server instance to avoid repeated disk I/O
-  // Keyed by JSON.stringify of selectedLayers (or "__all__" for all layers)
-  // Cache is intentionally small and not persisted across restarts.
-  const cacheKey = selectedLayers && selectedLayers.length > 0 ? `sel:${JSON.stringify(selectedLayers.map(l=>l.path))}` : "__all__";
-  // @ts-ignore - attach cache to function to keep module-level state minimal
-  const cache: Map<string, LayerContextFile[]> = (loadLayerContext as any).cache || new Map();
-  (loadLayerContext as any).cache = cache;
+  // In-memory cache for active server instance to avoid repeated disk I/O.
+  // Cache entries are validated by file stats + TTL to keep results fresh.
+  const cacheKey =
+    selectedLayers && selectedLayers.length > 0
+      ? `sel:${JSON.stringify(selectedLayers.map((layer) => layer.path))}`
+      : "__all__";
 
-  if (cache.has(cacheKey)) {
-    return cache.get(cacheKey) || [];
-  }
   if (selectedLayers && selectedLayers.length > 0) {
-    const contexts = await loadSelectedLayers(selectedLayers);
-    cache.set(cacheKey, contexts);
+    const resolvedLayers = await resolveSelectedLayers(selectedLayers);
+    const signature = await buildSignatureForResolvedLayers(resolvedLayers);
+    const cached = getCachedLayers(cacheKey, signature);
+    if (cached) return cached;
+
+    const contexts = await loadSelectedLayers(resolvedLayers);
+    setCachedLayers(cacheKey, signature, contexts);
     return contexts;
   }
 
@@ -58,19 +73,25 @@ export async function loadLayerContext(
     .filter((entry) => entry.toLowerCase().endsWith(".md"))
     .sort((a, b) => a.localeCompare(b));
 
+  const fullPaths = markdownFiles.map((fileName) =>
+    path.join(getLayersDir(), fileName)
+  );
+  const signature = await buildSignatureForPaths(fullPaths);
+  const cached = getCachedLayers(cacheKey, signature);
+  if (cached) return cached;
+
   const contexts = await Promise.all(
-    markdownFiles.map(async (fileName) => {
-  const fullPath = path.join(getLayersDir(), fileName);
+    fullPaths.map(async (fullPath) => {
       const content = await fs.readFile(fullPath, "utf8");
       return {
-        name: fileName,
+        name: path.basename(fullPath),
         content: content.trim(),
       };
     })
   );
 
   const filtered = contexts.filter((context) => context.content.length > 0);
-  cache.set(cacheKey, filtered);
+  setCachedLayers(cacheKey, signature, filtered);
   return filtered;
 }
 
@@ -111,21 +132,104 @@ export function buildLayeredPrompt(
 }
 
 async function loadSelectedLayers(
-  selectedLayers: LayerPathInput[]
+  resolvedLayers: ResolvedLayer[]
 ): Promise<LayerContextFile[]> {
   const contexts = await Promise.all(
-    selectedLayers.map(async (layer) => {
-      const resolvedPath = await resolveLayerPath(layer.path.trim());
+    resolvedLayers.map(async ({ input, resolvedPath }) => {
       const content = (await fs.readFile(resolvedPath, "utf8")).trim();
 
       return {
-        name: layer.label?.trim() || path.basename(layer.path),
+        name: input.label?.trim() || path.basename(input.path),
         content,
       };
     })
   );
 
   return contexts.filter((context) => context.content.length > 0);
+}
+
+async function resolveSelectedLayers(
+  selectedLayers: LayerPathInput[]
+): Promise<ResolvedLayer[]> {
+  return Promise.all(
+    selectedLayers.map(async (layer) => {
+      const resolvedPath = await resolveLayerPath(layer.path.trim());
+      return { input: layer, resolvedPath };
+    })
+  );
+}
+
+async function buildSignatureForResolvedLayers(
+  resolvedLayers: ResolvedLayer[]
+): Promise<string> {
+  const signatureParts = await Promise.all(
+    resolvedLayers.map(async ({ resolvedPath }) => {
+      const stat = await fs.stat(resolvedPath);
+      return { path: resolvedPath, mtimeMs: stat.mtimeMs, size: stat.size };
+    })
+  );
+  return buildSignature(signatureParts);
+}
+
+async function buildSignatureForPaths(pathsToCheck: string[]): Promise<string> {
+  const signatureParts = await Promise.all(
+    pathsToCheck.map(async (filePath) => {
+      const stat = await fs.stat(filePath);
+      return { path: filePath, mtimeMs: stat.mtimeMs, size: stat.size };
+    })
+  );
+  return buildSignature(signatureParts);
+}
+
+function buildSignature(
+  parts: Array<{ path: string; mtimeMs: number; size: number }>
+): string {
+  return JSON.stringify(parts);
+}
+
+function getCachedLayers(
+  cacheKey: string,
+  signature: string
+): LayerContextFile[] | null {
+  const cache = getLayerCache();
+  const cached = cache.get(cacheKey);
+  if (!cached) return null;
+  if (Date.now() > cached.expiresAt) {
+    cache.delete(cacheKey);
+    return null;
+  }
+  if (cached.signature !== signature) {
+    return null;
+  }
+  return cached.contexts;
+}
+
+function setCachedLayers(
+  cacheKey: string,
+  signature: string,
+  contexts: LayerContextFile[]
+): void {
+  const cache = getLayerCache();
+  cache.set(cacheKey, {
+    contexts,
+    signature,
+    expiresAt: Date.now() + LAYER_CACHE_TTL_MS,
+  });
+
+  if (cache.size > LAYER_CACHE_MAX) {
+    const oldestKey = cache.keys().next().value as string | undefined;
+    if (oldestKey) {
+      cache.delete(oldestKey);
+    }
+  }
+}
+
+function getLayerCache(): Map<string, LayerCacheEntry> {
+  // @ts-ignore - attach cache to function to keep module-level state minimal
+  const cache: Map<string, LayerCacheEntry> =
+    (loadLayerContext as any).cache || new Map();
+  (loadLayerContext as any).cache = cache;
+  return cache;
 }
 
 async function resolveLayerPath(layerPath: string): Promise<string> {
