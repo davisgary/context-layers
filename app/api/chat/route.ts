@@ -98,33 +98,177 @@ export async function POST(request: Request) {
     // Normalize Markdown spacing for readability while avoiding changes inside fenced code blocks.
     function normalizeMarkdownSpacing(md: string): string {
       if (!md) return md;
+      // Unwrap fenced blocks that are actually markdown content so they render correctly.
+      md = unwrapMarkdownCodeBlocks(md);
       // Split on fenced code blocks so we don't alter their contents.
       const parts = md.split(/(```[\s\S]*?```)/g);
       for (let i = 0; i < parts.length; i++) {
         // Only transform outside code blocks (even indices)
         if (i % 2 === 0) {
           let text = parts[i];
-          // Fix inline markdown tables that arrived on a single line.
-          // Turns "| a | b | | c | d |" into proper multi-line rows.
-          text = text.replace(/\|\s*\|\s*(?=\S)/g, "|\n| ");
-          // Trim extra whitespace at the end of table lines.
-          text = text.replace(/(\|[^\n]*\|)\s+\n/g, "$1\n");
-          // Remove blank lines inside tables (tables should be contiguous).
-          text = text.replace(/(\|[^\n]*\|)\n\n(?=\|)/g, "$1\n");
-          // Ensure a blank line before table rows for proper Markdown parsing.
-          text = text.replace(/([^\n])\n(\|[^\n]*\|)/g, "$1\n\n$2");
-          // Ensure a blank line after tables when followed by text.
-          text = text.replace(/(\|[^\n]*\|)\n(?!\n|\|)/g, "$1\n\n");
+          // Normalize markdown tables so rows are contiguous and on their own lines.
+          const lines = text.split("\n");
+          const normalizedLines: string[] = [];
+          let inTable = false;
+
+          for (const line of lines) {
+            const trimmed = line.trimEnd();
+            const isTableLine = trimmed.trim().startsWith("|") && trimmed.includes("|");
+
+            if (isTableLine) {
+              if (!inTable && normalizedLines.length > 0 && normalizedLines[normalizedLines.length - 1].trim() !== "") {
+                normalizedLines.push("");
+              }
+              inTable = true;
+
+              // If multiple rows were jammed into one line, split them.
+              const splitRows = trimmed
+                .replace(/\|\s*\|\s*(?=\S)/g, "|\n| ")
+                .replace(/\s+\|\s*(:?-{3,}|:{1,2}-{3,}:{0,1})/g, "\n| $1")
+                .split("\n");
+              for (const row of splitRows) {
+                let cleanedRow = row.trimEnd();
+                const separatorMatch = cleanedRow.match(/\|\s*:?-{3,}/);
+                if (separatorMatch?.index && separatorMatch.index > 0) {
+                  const before = cleanedRow.slice(0, separatorMatch.index).trimEnd();
+                  const after = cleanedRow.slice(separatorMatch.index).trimStart();
+                  if (before.replace(/[\s|]/g, "").length > 0) {
+                    normalizedLines.push(before);
+                    normalizedLines.push(after);
+                    continue;
+                  }
+                }
+                if (cleanedRow.trim().startsWith("|")) {
+                  const parts = cleanedRow.split("|");
+                  const cells = parts
+                    .slice(1, parts.length - 1)
+                    .map((cell) => cell.trim());
+                  if (cells.length > 0) {
+                    const isSeparatorRow = cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+                    if (isSeparatorRow) {
+                      cleanedRow = `| ${cells.map(() => "---").join(" | ")} |`;
+                    } else {
+                      cleanedRow = `| ${cells.join(" | ")} |`;
+                    }
+                  }
+                }
+                normalizedLines.push(cleanedRow);
+              }
+              continue;
+            }
+
+            if (inTable) {
+              if (trimmed.trim() === "") {
+                // Drop blank lines inside table blocks.
+                continue;
+              }
+              // End of table; ensure a blank line after it.
+              if (normalizedLines.length > 0 && normalizedLines[normalizedLines.length - 1].trim() !== "") {
+                normalizedLines.push("");
+              }
+              inTable = false;
+            }
+
+            normalizedLines.push(trimmed);
+          }
+
+          if (inTable && normalizedLines.length > 0 && normalizedLines[normalizedLines.length - 1].trim() !== "") {
+            normalizedLines.push("");
+          }
+
+          text = normalizedLines.join("\n");
           // Ensure at least one blank line before any heading (if not start of document)
           text = text.replace(/([^\n])\n(#{1,6}\s)/g, "$1\n\n$2");
           // Ensure a blank line after each heading
           text = text.replace(/(#{1,6}[^\n]*)\n(?!\n|$)/g, "$1\n\n");
           // Collapse 3+ newlines into exactly two for consistent paragraph spacing
           text = text.replace(/\n{3,}/g, "\n\n");
+          // Convert any remaining markdown tables to bullet lists to avoid pipe symbols in output.
+          text = convertTablesToLists(text);
           parts[i] = text;
         }
       }
       return parts.join("");
+    }
+
+    function unwrapMarkdownCodeBlocks(input: string): string {
+      return input.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, body) => {
+        const language = typeof lang === "string" ? lang.toLowerCase() : "";
+        if (language && language !== "md" && language !== "markdown") {
+          return match;
+        }
+        const trimmedBody = body.trim();
+        const looksLikeMarkdown = /^(#{1,6}\s|\*\s|\-\s|\d+\.\s)/m.test(trimmedBody);
+        if (!looksLikeMarkdown) {
+          return match;
+        }
+        return trimmedBody;
+      });
+    }
+
+    function convertTablesToLists(input: string): string {
+      const lines = input.split("\n");
+      const output: string[] = [];
+      let idx = 0;
+
+      const isTableLine = (line: string) => line.trim().startsWith("|") && line.includes("|");
+
+      while (idx < lines.length) {
+        if (!isTableLine(lines[idx])) {
+          output.push(lines[idx]);
+          idx += 1;
+          continue;
+        }
+
+        const tableLines: string[] = [];
+        while (idx < lines.length && isTableLine(lines[idx])) {
+          tableLines.push(lines[idx]);
+          idx += 1;
+        }
+
+        if (tableLines.length < 2) {
+          output.push(...tableLines);
+          continue;
+        }
+
+        const headers = tableLines[0]
+          .split("|")
+          .slice(1, -1)
+          .map((cell) => cell.trim());
+        const dataLines = tableLines.slice(2);
+
+        if (headers.length === 0 || dataLines.length === 0) {
+          output.push(...tableLines);
+          continue;
+        }
+
+        for (const row of dataLines) {
+          const cells = row
+            .split("|")
+            .slice(1, -1)
+            .map((cell) => cell.trim());
+          if (cells.length === 0) continue;
+          const hasContent = cells.some((cell) => cell.length > 0 && !/^:?-{3,}:?$/.test(cell));
+          if (!hasContent) {
+            continue;
+          }
+          const pairs = headers.map((header, index) => {
+            const value = cells[index] ?? "";
+            return `${header}: ${value}`.trim();
+          });
+          const nonEmptyPairs = pairs.filter((pair) => !pair.endsWith(":") && !pair.endsWith(": "));
+          if (nonEmptyPairs.length === 0) {
+            continue;
+          }
+          output.push(`- ${nonEmptyPairs.join("; ")}`);
+        }
+
+        if (output.length > 0 && output[output.length - 1].trim() !== "") {
+          output.push("");
+        }
+      }
+
+      return output.join("\n");
     }
 
     finalAnswer = normalizeMarkdownSpacing(finalAnswer);
