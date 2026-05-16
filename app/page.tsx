@@ -10,6 +10,8 @@ type LayerInput = {
   label: string;
 };
 
+const LAYER_STORAGE_KEY = "layers:user-inputs";
+
 type ChatSource = "openai" | "claude" | "ollama";
 type SourceModelState = {
   openai: string;
@@ -67,6 +69,26 @@ function layerPathExample(_index: number): string {
   return "Documents/github/repo/SKILL.md";
 }
 
+function sanitizeStoredLayers(raw: string | null): LayerInput[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const sanitized = parsed
+      .filter((item) => item && typeof item === "object")
+      .map((item) => {
+        const record = item as Record<string, unknown>;
+        return {
+          path: typeof record.path === "string" ? record.path : "",
+          label: typeof record.label === "string" ? record.label : "",
+        };
+      });
+    return sanitized.length > 0 ? sanitized : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
   const queryRef = useRef<HTMLTextAreaElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -89,6 +111,23 @@ export default function Home() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = sanitizeStoredLayers(localStorage.getItem(LAYER_STORAGE_KEY));
+    if (stored && stored.length > 0) {
+      setLayers(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(LAYER_STORAGE_KEY, JSON.stringify(layers));
+    } catch {
+      // Ignore storage errors (e.g., private mode or quota exceeded).
+    }
+  }, [layers]);
 
   function addLayer() {
     setLayers((prev) => [...prev, { path: "", label: "" }]);
