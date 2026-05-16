@@ -1,13 +1,13 @@
 # Layers
 
-Layers provides LLMs with layered context memory for each request, producing deeper, more context-aware responses based on user data. From the frontend, pick a model and it will attach the layers to every request from the file paths you enter.
+Provides LLMs with layered context memory for each request, producing deeper, more context-aware responses based on user data. From the frontend, pick a model and it will attach the layers to every request from the file paths you enter.
 
 > Note: This repository is currently intended to run locally. Environment variables in a local env file control which models and API keys are available to the frontend and server.
 
 ## Key concepts
 
- - Context layer: a piece of text or document loaded from a file or folder that is provided as context to every model query. Unlike many ChatGPT and Claude-style workflows that dump raw files and rely on the model to decide what to use, Layers intentionally supplies curated, structured context. Users explicitly enable and order layers (priority is preserved). Content can be preprocessed (summarized, chunked, or sanitized) before being attached so the model receives predictable, prioritized instructions and information — improving reliability, reproducibility, and control compared with leaving selection up to the LLM.
-- Local-first: Layers can be pulled from files inside this project (for example the `layers/` dir) or from any folder on your machine by entering a path in the UI.
+- Extend the context window for LLMs by attaching structured, per-query context "layers." Instead of relying on the model to decide which context to use, Layers maintains an explicit, ordered memory ("structured reasoning memory") that seeds responses and helps form the foundation for LLM reasoning.
+- Layers can be loaded from files inside the project (for example the `layers/` directory) or from any folder on your machine by entering the path on the frontend. The more context you provide, the less prompting you'll need and the more reliable, data-rich, and knowledgeable the outputs become.
 - Model selection: the frontend UI exposes model selection; the selected model and API key(s) are configured via environment variables.
 - Providers: this project supports OpenAI (OpenAI API), Anthropic Claude (Claude API), and Ollama for running local models.
 
@@ -92,6 +92,6 @@ npm run dev
 - [ ] Follow-up suggestions — after each model response, generate suggested follow-up prompts or actions (brief & contextual) to help iterate with the model.
 - [ ] Simplifying fills to improve efficiency and reduce tokens — optimize prompt templates and layer concatenation (summarize long layers, use templates, or chunk+retrieve) to lower token use while preserving signal.
 - [ ] Add caching for processed layers — cache preprocessed layer content (summaries, embeddings, or canonicalized chunks) with a TTL and simple invalidation to avoid re-reading and re-tokenizing unchanged files; this will reduce latency, API token usage, and server load.
-- [ ] Templates for different topics — create a set of starter `.md` templates in `layers/` (e.g., knowledge topics, code review, project brief, persona) that users can quickly enable and customize.
+- [ ] Templates for different topics — create a set of starter `.md` templates in `layers/` (e.g., knowledge graphs, data sets, project brief, persona, etc) that users can quickly enable and customize.
 
 ---
