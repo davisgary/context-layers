@@ -83,7 +83,6 @@ npm run dev
 
 ## Roadmap & Todos
 
-- [ ] Stream answers — implement streaming model responses so the frontend can render partial output as it's produced, improving response time.
 - [ ] Production build with third-party OAuth for LLM integrations. Implement secure per-user OAuth flows so individual users can sign in with their own LLM provider account (do not rely on API keys in env for user access).
 - [ ] Integrate auth — implement user authentication and session management.
 - [ ] Integrate DB — add Postgres (Neon) for users, layers, sessions, and provider tokens.
@@ -92,6 +91,7 @@ npm run dev
 - [ ] Follow-up suggestions — after each model response, generate suggested follow-up prompts or actions (brief & contextual) to help iterate with the model.
 - [ ] Simplifying fills to improve efficiency and reduce tokens — optimize prompt templates and layer concatenation (summarize long layers, use templates, or chunk+retrieve) to lower token use while preserving signal.
 - [ ] Templates for different topics — create a set of starter `.md` templates in `layers/` (e.g., knowledge graphs, data sets, project brief, persona, etc) that users can quickly enable and customize.
+- [x] Stream answers — implement streaming model responses so the frontend can render partial output as it's produced, improving response time.
 - [x] Add caching for processed layers — cache preprocessed layer content (summaries, embeddings, or canonicalized chunks) with a TTL and simple invalidation to avoid re-reading and re-tokenizing unchanged files; this will reduce latency, API token usage, and server load.
 - [x] Persist selected layer paths — save the user's active layer file paths for session persistence (local file or DB), so enabled layers are preserved between restarts or sessions.
 
