@@ -232,21 +232,72 @@ export default function Home() {
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
         body: JSON.stringify({
           query,
           source,
           model: currentModel(),
           layers: payloadLayers.length > 0 ? payloadLayers : undefined,
+          stream: true,
         }),
       });
 
-      const data = (await response.json()) as { answer?: string; error?: string };
-
       if (!response.ok) {
-        throw new Error(data.error ?? "Request failed.");
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const data = (await response.json()) as { error?: string };
+          throw new Error(data.error ?? "Request failed.");
+        }
+        const fallback = await response.text();
+        throw new Error(fallback || "Request failed.");
       }
 
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("text/event-stream") && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let streamError: string | null = null;
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() ?? "";
+
+          for (const chunk of chunks) {
+            const lines = chunk.split("\n");
+            for (const line of lines) {
+              if (!line.startsWith("data:")) continue;
+              const data = line.replace(/^data:\s*/, "").trim();
+              if (!data) continue;
+              const payload = JSON.parse(data) as {
+                delta?: string;
+                done?: boolean;
+                error?: string;
+              };
+              if (payload.delta) {
+                setAnswer((prev) => prev + payload.delta);
+              }
+              if (payload.error) {
+                streamError = payload.error;
+              }
+            }
+          }
+        }
+
+        if (streamError) {
+          throw new Error(streamError);
+        }
+
+        return;
+      }
+
+      const data = (await response.json()) as { answer?: string };
       setAnswer(data.answer ?? "");
     } catch (submitError) {
       const message =

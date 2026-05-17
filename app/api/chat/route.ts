@@ -8,6 +8,8 @@ import {
 
 type ChatSource = "openai" | "claude" | "ollama";
 
+type StreamWriter = (chunk: string) => void;
+
 const RESPONSE_CACHE_TTL_MS = 2 * 60 * 1000;
 const RESPONSE_CACHE_MAX = 100;
 const responseCache = new Map<
@@ -59,6 +61,7 @@ export async function POST(request: Request) {
       layers?: unknown;
       source?: unknown;
       model?: unknown;
+      stream?: unknown;
     };
     const query = typeof body.query === "string" ? body.query.trim() : "";
 
@@ -75,212 +78,310 @@ export async function POST(request: Request) {
     const source = parseSource(body.source);
     const model = parseRequiredModel(body.model);
     const layerInputs = parseLayerInputs(body.layers);
+    const acceptHeader = request.headers.get("accept") || "";
+    const wantsStream =
+      body.stream !== false &&
+      !acceptHeader.includes("application/json") &&
+      (body.stream === true || acceptHeader.includes("text/event-stream") || !body.stream);
     const cacheKey = buildResponseCacheKey(source, model, query, layerInputs);
     const cachedAnswer = getCachedAnswer(cacheKey);
     if (cachedAnswer) {
-      return NextResponse.json({ answer: cachedAnswer, source, model });
+      if (!wantsStream) {
+        return NextResponse.json({ answer: cachedAnswer, source, model });
+      }
+
+      const stream = new ReadableStream({
+        async start(controller) {
+          await streamCachedAnswer(cachedAnswer, controller);
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no",
+        },
+      });
     }
     const contexts = await loadLayerContext(layerInputs);
     const prompt = buildLayeredPrompt(query, contexts);
-    const answer = await generateAnswer(source, prompt, model);
+    if (!wantsStream) {
+      const answer = await generateAnswer(source, prompt, model);
 
-    let finalAnswer = answer;
+      let finalAnswer = answer;
 
-    if (!finalAnswer) {
-      return NextResponse.json(
-        { error: "Model returned an empty response." },
-        { status: 502 }
-      );
-    }
-
-    // Do not force or prepend any top-level headings; respect the model's original output.
-
-    // Normalize Markdown spacing for readability while avoiding changes inside fenced code blocks.
-    function normalizeMarkdownSpacing(md: string): string {
-      if (!md) return md;
-      // Unwrap fenced blocks that are actually markdown content so they render correctly.
-      md = unwrapMarkdownCodeBlocks(md);
-      // Split on fenced code blocks so we don't alter their contents.
-      const parts = md.split(/(```[\s\S]*?```)/g);
-      for (let i = 0; i < parts.length; i++) {
-        // Only transform outside code blocks (even indices)
-        if (i % 2 === 0) {
-          let text = parts[i];
-          // Normalize markdown tables so rows are contiguous and on their own lines.
-          const lines = text.split("\n");
-          const normalizedLines: string[] = [];
-          let inTable = false;
-
-          for (const line of lines) {
-            const trimmed = line.trimEnd();
-            const isTableLine = trimmed.trim().startsWith("|") && trimmed.includes("|");
-
-            if (isTableLine) {
-              if (!inTable && normalizedLines.length > 0 && normalizedLines[normalizedLines.length - 1].trim() !== "") {
-                normalizedLines.push("");
-              }
-              inTable = true;
-
-              // If multiple rows were jammed into one line, split them.
-              const splitRows = trimmed
-                .replace(/\|\s*\|\s*(?=\S)/g, "|\n| ")
-                .replace(/\s+\|\s*(:?-{3,}|:{1,2}-{3,}:{0,1})/g, "\n| $1")
-                .split("\n");
-              for (const row of splitRows) {
-                let cleanedRow = row.trimEnd();
-                const separatorMatch = cleanedRow.match(/\|\s*:?-{3,}/);
-                if (separatorMatch?.index && separatorMatch.index > 0) {
-                  const before = cleanedRow.slice(0, separatorMatch.index).trimEnd();
-                  const after = cleanedRow.slice(separatorMatch.index).trimStart();
-                  if (before.replace(/[\s|]/g, "").length > 0) {
-                    normalizedLines.push(before);
-                    normalizedLines.push(after);
-                    continue;
-                  }
-                }
-                if (cleanedRow.trim().startsWith("|")) {
-                  const parts = cleanedRow.split("|");
-                  const cells = parts
-                    .slice(1, parts.length - 1)
-                    .map((cell) => cell.trim());
-                  if (cells.length > 0) {
-                    const isSeparatorRow = cells.every((cell) => /^:?-{3,}:?$/.test(cell));
-                    if (isSeparatorRow) {
-                      cleanedRow = `| ${cells.map(() => "---").join(" | ")} |`;
-                    } else {
-                      cleanedRow = `| ${cells.join(" | ")} |`;
-                    }
-                  }
-                }
-                normalizedLines.push(cleanedRow);
-              }
-              continue;
-            }
-
-            if (inTable) {
-              if (trimmed.trim() === "") {
-                // Drop blank lines inside table blocks.
-                continue;
-              }
-              // End of table; ensure a blank line after it.
-              if (normalizedLines.length > 0 && normalizedLines[normalizedLines.length - 1].trim() !== "") {
-                normalizedLines.push("");
-              }
-              inTable = false;
-            }
-
-            normalizedLines.push(trimmed);
-          }
-
-          if (inTable && normalizedLines.length > 0 && normalizedLines[normalizedLines.length - 1].trim() !== "") {
-            normalizedLines.push("");
-          }
-
-          text = normalizedLines.join("\n");
-          // Ensure at least one blank line before any heading (if not start of document)
-          text = text.replace(/([^\n])\n(#{1,6}\s)/g, "$1\n\n$2");
-          // Ensure a blank line after each heading
-          text = text.replace(/(#{1,6}[^\n]*)\n(?!\n|$)/g, "$1\n\n");
-          // Collapse 3+ newlines into exactly two for consistent paragraph spacing
-          text = text.replace(/\n{3,}/g, "\n\n");
-          // Convert any remaining markdown tables to bullet lists to avoid pipe symbols in output.
-          text = convertTablesToLists(text);
-          parts[i] = text;
-        }
-      }
-      return parts.join("");
-    }
-
-    function unwrapMarkdownCodeBlocks(input: string): string {
-      return input.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, body) => {
-        const language = typeof lang === "string" ? lang.toLowerCase() : "";
-        if (language && language !== "md" && language !== "markdown") {
-          return match;
-        }
-        const trimmedBody = body.trim();
-        const looksLikeMarkdown = /^(#{1,6}\s|\*\s|\-\s|\d+\.\s)/m.test(trimmedBody);
-        if (!looksLikeMarkdown) {
-          return match;
-        }
-        return trimmedBody;
-      });
-    }
-
-    function convertTablesToLists(input: string): string {
-      const lines = input.split("\n");
-      const output: string[] = [];
-      let idx = 0;
-
-      const isTableLine = (line: string) => line.trim().startsWith("|") && line.includes("|");
-
-      while (idx < lines.length) {
-        if (!isTableLine(lines[idx])) {
-          output.push(lines[idx]);
-          idx += 1;
-          continue;
-        }
-
-        const tableLines: string[] = [];
-        while (idx < lines.length && isTableLine(lines[idx])) {
-          tableLines.push(lines[idx]);
-          idx += 1;
-        }
-
-        if (tableLines.length < 2) {
-          output.push(...tableLines);
-          continue;
-        }
-
-        const headers = tableLines[0]
-          .split("|")
-          .slice(1, -1)
-          .map((cell) => cell.trim());
-        const dataLines = tableLines.slice(2);
-
-        if (headers.length === 0 || dataLines.length === 0) {
-          output.push(...tableLines);
-          continue;
-        }
-
-        for (const row of dataLines) {
-          const cells = row
-            .split("|")
-            .slice(1, -1)
-            .map((cell) => cell.trim());
-          if (cells.length === 0) continue;
-          const hasContent = cells.some((cell) => cell.length > 0 && !/^:?-{3,}:?$/.test(cell));
-          if (!hasContent) {
-            continue;
-          }
-          const pairs = headers.map((header, index) => {
-            const value = cells[index] ?? "";
-            return `${header}: ${value}`.trim();
-          });
-          const nonEmptyPairs = pairs.filter((pair) => !pair.endsWith(":") && !pair.endsWith(": "));
-          if (nonEmptyPairs.length === 0) {
-            continue;
-          }
-          output.push(`- ${nonEmptyPairs.join("; ")}`);
-        }
-
-        if (output.length > 0 && output[output.length - 1].trim() !== "") {
-          output.push("");
-        }
+      if (!finalAnswer) {
+        return NextResponse.json(
+          { error: "Model returned an empty response." },
+          { status: 502 }
+        );
       }
 
-      return output.join("\n");
+      // Do not force or prepend any top-level headings; respect the model's original output.
+      finalAnswer = normalizeMarkdownSpacing(finalAnswer);
+      setCachedAnswer(cacheKey, finalAnswer);
+
+      return NextResponse.json({ answer: finalAnswer, source, model });
     }
 
-    finalAnswer = normalizeMarkdownSpacing(finalAnswer);
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        let collected = "";
 
-  setCachedAnswer(cacheKey, finalAnswer);
+        const write: StreamWriter = (chunk) => {
+          if (!chunk) return;
+          collected += chunk;
+          const payload = JSON.stringify({ delta: chunk });
+          controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+        };
 
-    return NextResponse.json({ answer: finalAnswer, source, model });
+        try {
+          await streamAnswer(source, prompt, model, write);
+          const normalized = normalizeMarkdownSpacing(collected);
+          if (normalized) {
+            setCachedAnswer(cacheKey, normalized);
+          }
+          const donePayload = JSON.stringify({ done: true });
+          controller.enqueue(encoder.encode(`data: ${donePayload}\n\n`));
+        } catch (streamError) {
+          const message =
+            streamError instanceof Error
+              ? streamError.message
+              : "Unexpected server error.";
+          const errorPayload = JSON.stringify({ error: message });
+          controller.enqueue(encoder.encode(`data: ${errorPayload}\n\n`));
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unexpected server error.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+async function streamCachedAnswer(
+  answer: string,
+  controller: ReadableStreamDefaultController
+): Promise<void> {
+  const encoder = new TextEncoder();
+  const chunkSize = 64;
+
+  for (let index = 0; index < answer.length; index += chunkSize) {
+    const chunk = answer.slice(index, index + chunkSize);
+    const payload = JSON.stringify({ delta: chunk });
+    controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  const donePayload = JSON.stringify({ done: true });
+  controller.enqueue(encoder.encode(`data: ${donePayload}\n\n`));
+  controller.close();
+}
+
+// Normalize Markdown spacing for readability while avoiding changes inside fenced code blocks.
+function normalizeMarkdownSpacing(md: string): string {
+  if (!md) return md;
+  // Unwrap fenced blocks that are actually markdown content so they render correctly.
+  md = unwrapMarkdownCodeBlocks(md);
+  // Split on fenced code blocks so we don't alter their contents.
+  const parts = md.split(/(```[\s\S]*?```)/g);
+  for (let i = 0; i < parts.length; i++) {
+    // Only transform outside code blocks (even indices)
+    if (i % 2 === 0) {
+      let text = parts[i];
+      // Normalize markdown tables so rows are contiguous and on their own lines.
+      const lines = text.split("\n");
+      const normalizedLines: string[] = [];
+      let inTable = false;
+
+      for (const line of lines) {
+        const trimmed = line.trimEnd();
+        const isTableLine = trimmed.trim().startsWith("|") && trimmed.includes("|");
+
+        if (isTableLine) {
+          if (
+            !inTable &&
+            normalizedLines.length > 0 &&
+            normalizedLines[normalizedLines.length - 1].trim() !== ""
+          ) {
+            normalizedLines.push("");
+          }
+          inTable = true;
+
+          // If multiple rows were jammed into one line, split them.
+          const splitRows = trimmed
+            .replace(/\|\s*\|\s*(?=\S)/g, "|\n| ")
+            .replace(/\s+\|\s*(:?-{3,}|:{1,2}-{3,}:{0,1})/g, "\n| $1")
+            .split("\n");
+          for (const row of splitRows) {
+            let cleanedRow = row.trimEnd();
+            const separatorMatch = cleanedRow.match(/\|\s*:?-{3,}/);
+            if (separatorMatch?.index && separatorMatch.index > 0) {
+              const before = cleanedRow.slice(0, separatorMatch.index).trimEnd();
+              const after = cleanedRow.slice(separatorMatch.index).trimStart();
+              if (before.replace(/[\s|]/g, "").length > 0) {
+                normalizedLines.push(before);
+                normalizedLines.push(after);
+                continue;
+              }
+            }
+            if (cleanedRow.trim().startsWith("|")) {
+              const parts = cleanedRow.split("|");
+              const cells = parts
+                .slice(1, parts.length - 1)
+                .map((cell) => cell.trim());
+              if (cells.length > 0) {
+                const isSeparatorRow = cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+                if (isSeparatorRow) {
+                  cleanedRow = `| ${cells.map(() => "---").join(" | ")} |`;
+                } else {
+                  cleanedRow = `| ${cells.join(" | ")} |`;
+                }
+              }
+            }
+            normalizedLines.push(cleanedRow);
+          }
+          continue;
+        }
+
+        if (inTable) {
+          if (trimmed.trim() === "") {
+            // Drop blank lines inside table blocks.
+            continue;
+          }
+          // End of table; ensure a blank line after it.
+          if (
+            normalizedLines.length > 0 &&
+            normalizedLines[normalizedLines.length - 1].trim() !== ""
+          ) {
+            normalizedLines.push("");
+          }
+          inTable = false;
+        }
+
+        normalizedLines.push(trimmed);
+      }
+
+      if (
+        inTable &&
+        normalizedLines.length > 0 &&
+        normalizedLines[normalizedLines.length - 1].trim() !== ""
+      ) {
+        normalizedLines.push("");
+      }
+
+      text = normalizedLines.join("\n");
+      // Ensure at least one blank line before any heading (if not start of document)
+      text = text.replace(/([^\n])\n(#{1,6}\s)/g, "$1\n\n$2");
+      // Ensure a blank line after each heading
+      text = text.replace(/(#{1,6}[^\n]*)\n(?!\n|$)/g, "$1\n\n");
+      // Collapse 3+ newlines into exactly two for consistent paragraph spacing
+      text = text.replace(/\n{3,}/g, "\n\n");
+      // Convert any remaining markdown tables to bullet lists to avoid pipe symbols in output.
+      text = convertTablesToLists(text);
+      parts[i] = text;
+    }
+  }
+  return parts.join("");
+}
+
+function unwrapMarkdownCodeBlocks(input: string): string {
+  return input.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, body) => {
+    const language = typeof lang === "string" ? lang.toLowerCase() : "";
+    if (language && language !== "md" && language !== "markdown") {
+      return match;
+    }
+    const trimmedBody = body.trim();
+    const looksLikeMarkdown = /^(#{1,6}\s|\*\s|\-\s|\d+\.\s)/m.test(trimmedBody);
+    if (!looksLikeMarkdown) {
+      return match;
+    }
+    return trimmedBody;
+  });
+}
+
+function convertTablesToLists(input: string): string {
+  const lines = input.split("\n");
+  const output: string[] = [];
+  let idx = 0;
+
+  const isTableLine = (line: string) => line.trim().startsWith("|") && line.includes("|");
+
+  while (idx < lines.length) {
+    if (!isTableLine(lines[idx])) {
+      output.push(lines[idx]);
+      idx += 1;
+      continue;
+    }
+
+    const tableLines: string[] = [];
+    while (idx < lines.length && isTableLine(lines[idx])) {
+      tableLines.push(lines[idx]);
+      idx += 1;
+    }
+
+    if (tableLines.length < 2) {
+      output.push(...tableLines);
+      continue;
+    }
+
+    const headers = tableLines[0]
+      .split("|")
+      .slice(1, -1)
+      .map((cell) => cell.trim());
+    const dataLines = tableLines.slice(2);
+
+    if (headers.length === 0 || dataLines.length === 0) {
+      output.push(...tableLines);
+      continue;
+    }
+
+    for (const row of dataLines) {
+      const cells = row
+        .split("|")
+        .slice(1, -1)
+        .map((cell) => cell.trim());
+      if (cells.length === 0) continue;
+      const hasContent = cells.some(
+        (cell) => cell.length > 0 && !/^:?-{3,}:?$/.test(cell)
+      );
+      if (!hasContent) {
+        continue;
+      }
+      const pairs = headers.map((header, index) => {
+        const value = cells[index] ?? "";
+        return `${header}: ${value}`.trim();
+      });
+      const nonEmptyPairs = pairs.filter(
+        (pair) => !pair.endsWith(":") && !pair.endsWith(": ")
+      );
+      if (nonEmptyPairs.length === 0) {
+        continue;
+      }
+      output.push(`- ${nonEmptyPairs.join("; ")}`);
+    }
+
+    if (output.length > 0 && output[output.length - 1].trim() !== "") {
+      output.push("");
+    }
+  }
+
+  return output.join("\n");
 }
 
 function parseSource(input: unknown): ChatSource {
@@ -358,6 +459,142 @@ async function generateAnswer(
 
   // Fallback to Ollama-compatible endpoint for any unknown source.
   return generateWithOllama(prompt, model);
+}
+
+async function streamAnswer(
+  source: ChatSource,
+  prompt: string,
+  model: string,
+  write: StreamWriter
+): Promise<void> {
+  if (source === "openai") {
+    await streamWithOpenAI(prompt, model, write);
+    return;
+  }
+  if (source === "claude") {
+    await streamWithClaude(prompt, model, write);
+    return;
+  }
+  if (source === "ollama") {
+    await streamWithOllama(prompt, model, write);
+    return;
+  }
+
+  const fallback = await generateWithOllama(prompt, model);
+  if (fallback) {
+    write(fallback);
+  }
+}
+
+async function streamWithOpenAI(
+  prompt: string,
+  model: string,
+  write: StreamWriter
+): Promise<void> {
+  const { getOpenAIClient } = await import("@/lib/openai-client");
+  const client = getOpenAIClient();
+  const stream = await client.responses.stream({ model, input: prompt });
+  let sawDelta = false;
+
+  for await (const event of stream) {
+    if (event?.type === "response.output_text.delta") {
+      const delta = typeof event.delta === "string" ? event.delta : "";
+      if (delta) {
+        sawDelta = true;
+        write(delta);
+      }
+    }
+  }
+
+  const final = await stream.finalResponse();
+  if (!sawDelta) {
+    const text = final.output_text?.trim() || "";
+    if (text) {
+      write(text);
+    }
+  }
+}
+
+async function streamWithClaude(
+  prompt: string,
+  model: string,
+  write: StreamWriter
+): Promise<void> {
+  const text = await generateWithClaude(prompt, model);
+  if (text) {
+    write(text);
+  }
+}
+
+async function streamWithOllama(
+  prompt: string,
+  model: string,
+  write: StreamWriter
+): Promise<void> {
+  const baseUrl = (process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434").replace(
+    /\/$/,
+    ""
+  );
+
+  const apiKey = process.env.OLLAMA_API_KEY;
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  if (apiKey) {
+    headers["authorization"] = `Bearer ${apiKey}`;
+  }
+
+  const response = await fetch(`${baseUrl}/api/generate`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ model, prompt, stream: true }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Ollama request failed: ${response.status} ${errorText}`);
+  }
+
+  if (!response.body) {
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const payload = JSON.parse(trimmed) as {
+        response?: string;
+        done?: boolean;
+      };
+      if (payload.response) {
+        write(payload.response);
+      }
+      if (payload.done) {
+        return;
+      }
+    }
+  }
+
+  const leftover = buffer.trim();
+  if (leftover) {
+    const payload = JSON.parse(leftover) as {
+      response?: string;
+    };
+    if (payload.response) {
+      write(payload.response);
+    }
+  }
 }
 
 async function generateWithOpenAI(
