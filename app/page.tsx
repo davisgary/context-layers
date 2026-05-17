@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { FiArrowUp, FiPlus, FiMinusCircle, FiChevronDown, FiLoader } from "react-icons/fi";
 import Footer from "../components/Footer";
 
@@ -541,7 +542,7 @@ export default function Home() {
           {answer ? (
             <div className="space-y-4 rounded-lg border border-muted bg-card p-6">
               <div className="prose max-w-none text-base break-words">
-                <ReactMarkdown>{answer}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown>
               </div>
             </div>
           ) : null}

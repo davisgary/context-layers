@@ -293,8 +293,6 @@ function normalizeMarkdownSpacing(md: string): string {
       text = text.replace(/(#{1,6}[^\n]*)\n(?!\n|$)/g, "$1\n\n");
       // Collapse 3+ newlines into exactly two for consistent paragraph spacing
       text = text.replace(/\n{3,}/g, "\n\n");
-      // Convert any remaining markdown tables to bullet lists to avoid pipe symbols in output.
-      text = convertTablesToLists(text);
       // Strip math notation delimiters while keeping content.
       text = text.replace(/\$\$([\s\S]*?)\$\$/g, "$1");
       text = text.replace(/\$([^$\n]+)\$/g, "$1");
@@ -319,81 +317,10 @@ function unwrapMarkdownCodeBlocks(input: string): string {
   });
 }
 
-function convertTablesToLists(input: string): string {
-  const lines = input.split("\n");
-  const output: string[] = [];
-  let idx = 0;
-
-  const isTableLine = (line: string) => line.trim().startsWith("|") && line.includes("|");
-
-  while (idx < lines.length) {
-    if (!isTableLine(lines[idx])) {
-      output.push(lines[idx]);
-      idx += 1;
-      continue;
-    }
-
-    const tableLines: string[] = [];
-    while (idx < lines.length && isTableLine(lines[idx])) {
-      tableLines.push(lines[idx]);
-      idx += 1;
-    }
-
-    if (tableLines.length < 2) {
-      output.push(...tableLines);
-      continue;
-    }
-
-    const headers = tableLines[0]
-      .split("|")
-      .slice(1, -1)
-      .map((cell) => cell.trim());
-    const dataLines = tableLines.slice(2);
-
-    if (headers.length === 0 || dataLines.length === 0) {
-      output.push(...tableLines);
-      continue;
-    }
-
-    for (const row of dataLines) {
-      const cells = row
-        .split("|")
-        .slice(1, -1)
-        .map((cell) => cell.trim());
-      if (cells.length === 0) continue;
-      const hasContent = cells.some(
-        (cell) => cell.length > 0 && !/^:?-{3,}:?$/.test(cell)
-      );
-      if (!hasContent) {
-        continue;
-      }
-      const pairs = headers.map((header, index) => {
-        const value = cells[index] ?? "";
-        return `${header}: ${value}`.trim();
-      });
-      const nonEmptyPairs = pairs.filter(
-        (pair) => !pair.endsWith(":") && !pair.endsWith(": ")
-      );
-      if (nonEmptyPairs.length === 0) {
-        continue;
-      }
-      output.push(`- ${nonEmptyPairs.join("; ")}`);
-    }
-
-    if (output.length > 0 && output[output.length - 1].trim() !== "") {
-      output.push("");
-    }
-  }
-
-  return output.join("\n");
-}
-
 function sanitizeStreamingChunk(chunk: string): string {
   let text = chunk;
   text = text.replace(/\$\$([\s\S]*?)\$\$/g, "$1");
   text = text.replace(/\$([^$\n]+)\$/g, "$1");
-  text = text.replace(/\|/g, " ");
-  text = text.replace(/(^|\n)\s*\|\s*:?-{3,}:?\s*\|?\s*$/g, "$1");
   return text;
 }
 
