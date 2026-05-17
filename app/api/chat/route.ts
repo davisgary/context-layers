@@ -296,6 +296,8 @@ function normalizeMarkdownSpacing(md: string): string {
       // Strip math notation delimiters while keeping content.
       text = text.replace(/\$\$([\s\S]*?)\$\$/g, "$1");
       text = text.replace(/\$([^$\n]+)\$/g, "$1");
+      text = text.replace(/\\rightarrow/g, "→");
+      text = text.replace(/\$/g, "");
       parts[i] = text;
     }
   }
@@ -321,6 +323,8 @@ function sanitizeStreamingChunk(chunk: string): string {
   let text = chunk;
   text = text.replace(/\$\$([\s\S]*?)\$\$/g, "$1");
   text = text.replace(/\$([^$\n]+)\$/g, "$1");
+  text = text.replace(/\\rightarrow/g, "→");
+  text = text.replace(/\$/g, "");
   return text;
 }
 
