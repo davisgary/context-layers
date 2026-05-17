@@ -119,8 +119,8 @@ export async function POST(request: Request) {
         );
       }
 
-      // Do not force or prepend any top-level headings; respect the model's original output.
-      finalAnswer = normalizeMarkdownSpacing(finalAnswer);
+  // Normalize Markdown while avoiding table pipes and math notation.
+  finalAnswer = normalizeMarkdownSpacing(finalAnswer);
       setCachedAnswer(cacheKey, finalAnswer);
 
       return NextResponse.json({ answer: finalAnswer, source, model });
@@ -133,8 +133,9 @@ export async function POST(request: Request) {
 
         const write: StreamWriter = (chunk) => {
           if (!chunk) return;
-          collected += chunk;
-          const payload = JSON.stringify({ delta: chunk });
+          const sanitized = sanitizeStreamingChunk(chunk);
+          collected += sanitized;
+          const payload = JSON.stringify({ delta: sanitized });
           controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
         };
 
@@ -294,6 +295,9 @@ function normalizeMarkdownSpacing(md: string): string {
       text = text.replace(/\n{3,}/g, "\n\n");
       // Convert any remaining markdown tables to bullet lists to avoid pipe symbols in output.
       text = convertTablesToLists(text);
+      // Strip math notation delimiters while keeping content.
+      text = text.replace(/\$\$([\s\S]*?)\$\$/g, "$1");
+      text = text.replace(/\$([^$\n]+)\$/g, "$1");
       parts[i] = text;
     }
   }
@@ -382,6 +386,15 @@ function convertTablesToLists(input: string): string {
   }
 
   return output.join("\n");
+}
+
+function sanitizeStreamingChunk(chunk: string): string {
+  let text = chunk;
+  text = text.replace(/\$\$([\s\S]*?)\$\$/g, "$1");
+  text = text.replace(/\$([^$\n]+)\$/g, "$1");
+  text = text.replace(/\|/g, " ");
+  text = text.replace(/(^|\n)\s*\|\s*:?-{3,}:?\s*\|?\s*$/g, "$1");
+  return text;
 }
 
 function parseSource(input: unknown): ChatSource {
