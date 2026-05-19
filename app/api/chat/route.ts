@@ -5,6 +5,7 @@ import {
   loadLayerContext,
   type LayerPathInput,
 } from "@/lib/layer-context";
+import { loadUrlContext, type UrlContextInput } from "@/lib/url-context";
 
 type ChatSource = "openai" | "claude" | "ollama";
 
@@ -21,13 +22,24 @@ function buildResponseCacheKey(
   source: ChatSource,
   model: string,
   query: string,
-  layers?: LayerPathInput[]
+  layers?: LayerPathInput[],
+  urls?: UrlContextInput[]
 ): string {
   const layerKey = layers?.map((layer) => ({
     path: layer.path,
     label: layer.label,
   }));
-  return JSON.stringify({ source, model, query, layers: layerKey || [] });
+  const urlKey = urls?.map((url) => ({
+    url: url.url,
+    label: url.label,
+  }));
+  return JSON.stringify({
+    source,
+    model,
+    query,
+    layers: layerKey || [],
+    urls: urlKey || [],
+  });
 }
 
 function getCachedAnswer(cacheKey: string): string | null {
@@ -59,6 +71,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       query?: unknown;
       layers?: unknown;
+      urls?: unknown;
       source?: unknown;
       model?: unknown;
       stream?: unknown;
@@ -69,7 +82,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
           {
             error:
-              "Expected body: { query: string, source?: 'openai' | 'claude' | 'ollama', model: string, layers?: Array<{ path: string, label?: string }> }",
+              "Expected body: { query: string, source?: 'openai' | 'claude' | 'ollama', model: string, layers?: Array<{ path: string, label?: string }>, urls?: Array<{ url: string, label?: string }> }",
           },
           { status: 400 }
         );
@@ -78,12 +91,19 @@ export async function POST(request: Request) {
     const source = parseSource(body.source);
     const model = parseRequiredModel(body.model);
     const layerInputs = parseLayerInputs(body.layers);
+    const urlInputs = parseUrlInputs(body.urls);
     const acceptHeader = request.headers.get("accept") || "";
     const wantsStream =
       body.stream !== false &&
       !acceptHeader.includes("application/json") &&
       (body.stream === true || acceptHeader.includes("text/event-stream") || !body.stream);
-    const cacheKey = buildResponseCacheKey(source, model, query, layerInputs);
+    const cacheKey = buildResponseCacheKey(
+      source,
+      model,
+      query,
+      layerInputs,
+      urlInputs
+    );
     const cachedAnswer = getCachedAnswer(cacheKey);
     if (cachedAnswer) {
       if (!wantsStream) {
@@ -105,7 +125,11 @@ export async function POST(request: Request) {
         },
       });
     }
-    const contexts = await loadLayerContext(layerInputs);
+    const [layerContexts, urlContexts] = await Promise.all([
+      loadLayerContext(layerInputs),
+      loadUrlContext(urlInputs),
+    ]);
+    const contexts = [...layerContexts, ...urlContexts];
     const prompt = buildLayeredPrompt(query, contexts);
     if (!wantsStream) {
       const answer = await generateAnswer(source, prompt, model);
@@ -371,6 +395,39 @@ function parseLayerInputs(input: unknown): LayerPathInput[] | undefined {
     return {
       path: layerPath.trim(),
       label: typeof layerLabel === "string" ? layerLabel.trim() : undefined,
+    };
+  });
+}
+
+function parseUrlInputs(input: unknown): UrlContextInput[] | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(input)) {
+    throw new Error("`urls` must be an array when provided.");
+  }
+
+  return input.map((entry, index) => {
+    if (!entry || typeof entry !== "object") {
+      throw new Error(`urls[${index}] must be an object.`);
+    }
+
+    const record = entry as Record<string, unknown>;
+    const url = record.url;
+    const label = record.label;
+
+    if (typeof url !== "string" || url.trim().length === 0) {
+      throw new Error(`urls[${index}].url must be a non-empty string.`);
+    }
+
+    if (label !== undefined && typeof label !== "string") {
+      throw new Error(`urls[${index}].label must be a string when provided.`);
+    }
+
+    return {
+      url: url.trim(),
+      label: typeof label === "string" ? label.trim() : undefined,
     };
   });
 }
