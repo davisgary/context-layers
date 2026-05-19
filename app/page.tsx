@@ -11,7 +11,13 @@ type LayerInput = {
   label: string;
 };
 
+type UrlInput = {
+  url: string;
+  label: string;
+};
+
 const LAYER_STORAGE_KEY = "layers:user-inputs";
+const URL_STORAGE_KEY = "layers:url-inputs";
 
 type ChatSource = "openai" | "claude" | "ollama";
 type SourceModelState = {
@@ -90,6 +96,26 @@ function sanitizeStoredLayers(raw: string | null): LayerInput[] | null {
   }
 }
 
+function sanitizeStoredUrls(raw: string | null): UrlInput[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const sanitized = parsed
+      .filter((item) => item && typeof item === "object")
+      .map((item) => {
+        const record = item as Record<string, unknown>;
+        return {
+          url: typeof record.url === "string" ? record.url : "",
+          label: typeof record.label === "string" ? record.label : "",
+        };
+      });
+    return sanitized.length > 0 ? sanitized : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function Home() {
   const queryRef = useRef<HTMLTextAreaElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -108,6 +134,7 @@ export default function Home() {
   const [layers, setLayers] = useState<LayerInput[]>([
     { path: "", label: "" },
   ]);
+  const [urls, setUrls] = useState<UrlInput[]>([{ url: "", label: "" }]);
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -119,6 +146,10 @@ export default function Home() {
     if (stored && stored.length > 0) {
       setLayers(stored);
     }
+    const storedUrls = sanitizeStoredUrls(localStorage.getItem(URL_STORAGE_KEY));
+    if (storedUrls && storedUrls.length > 0) {
+      setUrls(storedUrls);
+    }
   }, []);
 
   useEffect(() => {
@@ -129,6 +160,15 @@ export default function Home() {
       // Ignore storage errors (e.g., private mode or quota exceeded).
     }
   }, [layers]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(URL_STORAGE_KEY, JSON.stringify(urls));
+    } catch {
+      // Ignore storage errors (e.g., private mode or quota exceeded).
+    }
+  }, [urls]);
 
   function addLayer() {
     setLayers((prev) => [...prev, { path: "", label: "" }]);
@@ -147,6 +187,23 @@ export default function Home() {
       prev.map((layer, i) =>
         i === index ? { ...layer, [field]: value } : layer
       )
+    );
+  }
+
+  function addUrl() {
+    setUrls((prev) => [...prev, { url: "", label: "" }]);
+  }
+
+  function removeUrl(index: number) {
+    setUrls((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  function updateUrl(index: number, field: keyof UrlInput, value: string) {
+    setUrls((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
     );
   }
 
@@ -230,6 +287,13 @@ export default function Home() {
       }))
       .filter((layer) => layer.path && layer.path.length > 0);
 
+    const payloadUrls = urls
+      .map((item, index) => ({
+        url: item.url.trim(),
+        label: item.label.trim() || `URL ${index + 1}`,
+      }))
+      .filter((item) => item.url && item.url.length > 0);
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -242,6 +306,7 @@ export default function Home() {
           source,
           model: currentModel(),
           layers: payloadLayers.length > 0 ? payloadLayers : undefined,
+          urls: payloadUrls.length > 0 ? payloadUrls : undefined,
           stream: true,
         }),
       });
@@ -414,6 +479,65 @@ export default function Home() {
                   >
                     <FiPlus className="h-4 w-4" />
                     Add layer
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-medium">Website URLs</h2>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Paste website URLs to scrape and add as context.
+              </p>
+
+              <div className="space-y-2">
+                {urls.map((item, index) => (
+                  <div
+                    key={index}
+                    className="grid grid-cols-1 gap-2 rounded-md border border-muted p-3 md:grid-cols-[1fr_1fr_auto]"
+                  >
+                    <input
+                      type="url"
+                      value={item.url}
+                      onChange={(event) =>
+                        updateUrl(index, "url", event.target.value)
+                      }
+                      className="rounded-md border border-muted bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                      placeholder="https://example.com/page"
+                    />
+                    <input
+                      type="text"
+                      value={item.label}
+                      onChange={(event) =>
+                        updateUrl(index, "label", event.target.value)
+                      }
+                      className="rounded-md border border-muted bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                      placeholder={`URL ${index + 1}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeUrl(index)}
+                      disabled={urls.length <= 1}
+                      title="Delete URL"
+                      aria-label="Delete URL"
+                      className="inline-flex items-center gap-2 rounded-md font-normal text-sm text-destructive px-2 py-2 cursor-pointer disabled:cursor-not-allowed transition-colors duration-300 ease-in-out hover:text-destructive/80 disabled:hover:text-destructive"
+                    >
+                      <FiMinusCircle />
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={addUrl}
+                    disabled={urls.length >= 6}
+                    className="inline-flex items-center gap-2 rounded-md border border-muted px-2 pr-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors duration-300 ease-in-out hover:text-foreground"
+                  >
+                    <FiPlus className="h-4 w-4" />
+                    Add URL
                   </button>
                 </div>
               </div>

@@ -8,6 +8,7 @@ Provides LLMs with layered context memory for each request, producing deeper, mo
 
 - Extend the context window for LLMs by attaching structured, per-query context "layers." Instead of relying on the model to decide which context to use, Layers maintains an explicit, ordered memory ("structured reasoning memory") that seeds responses and helps form the foundation for LLM reasoning.
 - Layers can be loaded from files inside the project (for example the `layers/` directory) or from any folder on your machine by entering the path on the frontend. The more context you provide, the less prompting you'll need and the more reliable, data-rich, and knowledgeable the outputs become.
+- Layers can also be created from website URLs. Paste URLs in the UI and the server will fetch, extract the main text, and add it as contextual layers for your request.
 - Model selection: the frontend UI exposes model selection; the selected model and API key(s) are configured via environment variables.
 - Providers: this project supports OpenAI (OpenAI API), Anthropic Claude (Claude API), and Ollama for running local models.
 
@@ -36,9 +37,12 @@ Keep secrets out of source control. If the repo already contains an example file
 
 - Open the app at `http://localhost:3000` (after `npm run dev`).
 - On the App Router pages (the UI under `app/`), use the Layers input to paste or type a path to a file or a folder.
+- Use the Website URLs input to paste one or more URLs to scrape. The server will fetch the page and extract the primary text (scripts/styles are removed).
 - Enable or disable specific layers in the UI before sending a query.
 
 Paths accepted: you can use relative paths (for example `SKILL.md` or `layers/SKILL.md`), local file paths like `Documents/github/repo/SKILL.md`, absolute paths starting with `/` (for example `/Users/you/Documents/SKILL.md`), or tilde-expanded paths like `~/Documents/SKILL.md`. You can also point at folder paths (for example `/Documents` or `~/Documents`) — the server will read supported files inside the folder. Relative paths are resolved from the project root where the Next.js server runs.
+
+For URLs, only `http` and `https` links are accepted. Each scraped URL becomes a layer labeled by the page title (or custom label if provided).
 
 The frontend stores which paths are active for the session and sends those layer paths with each query to the server. The server reads files, parses supported formats (plain text, Markdown), and builds the context bundle for the chosen model.
 
@@ -87,10 +91,10 @@ npm run dev
 - [ ] Integrate auth — implement user authentication and session management.
 - [ ] Integrate DB — add Postgres (Neon) for users, layers, sessions, and provider tokens.
 - [ ] Make editable .md files — provide an in-app editor to create and edit Markdown layers, and persist edits (either to filesystem or DB-backed storage) with versioning or save history.
-- [ ] Scrape link function — implement URL fetching + parsing to turn a web page into one or more layers (fetch HTML, extract main content, convert to Markdown, sanitize), and add UI to import a URL.
 - [ ] Follow-up suggestions — after each model response, generate suggested follow-up prompts or actions (brief & contextual) to help iterate with the model.
 - [ ] Simplifying fills to improve efficiency and reduce tokens — optimize prompt templates and layer concatenation (summarize long layers, use templates, or chunk+retrieve) to lower token use while preserving signal.
 - [ ] Templates for different topics — create a set of starter `.md` templates in `layers/` (e.g., knowledge graphs, data sets, project brief, persona, etc) that users can quickly enable and customize.
+- [x] Add URL scraping as a data source — implement URL fetching + parsing to turn a web page into one or more layers (fetch HTML, extract main content, convert to Markdown, sanitize), and add field on frontend for a URL.
 - [x] Stream answers — implement streaming model responses so the frontend can render partial output as it's produced, improving response time.
 - [x] Add caching for processed layers — cache preprocessed layer content (summaries, embeddings, or canonicalized chunks) with a TTL and simple invalidation to avoid re-reading and re-tokenizing unchanged files; this will reduce latency, API token usage, and server load.
 - [x] Persist selected layer paths — save the user's active layer file paths for session persistence (local file or DB), so enabled layers are preserved between restarts or sessions.
