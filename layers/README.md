@@ -6,17 +6,6 @@ Place markdown files in this directory.
 - If `layers` is omitted, all `*.md` files in this directory are loaded (alphabetical order).
 - If `layers` is provided, only those files are loaded in the exact order sent by the user.
 
-Request shape:
-```json
-{
-  "query": "What should I do next?",
-  "layers": [
-    { "path": "01-my-layer.md", "label": "My Layer" },
-    { "path": "~/Documents/github/project/README.md", "label": "Project README" }
-  ]
-}
-```
-
 Notes:
 - `path` supports:
 - Relative to `layers/` (example: `01-my-layer.md`)
