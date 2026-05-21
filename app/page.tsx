@@ -90,7 +90,8 @@ function sanitizeStoredLayers(raw: string | null): LayerInput[] | null {
           label: typeof record.label === "string" ? record.label : "",
         };
       });
-    return sanitized.length > 0 ? sanitized : null;
+    const filtered = sanitized.filter((s) => s.path && s.path.trim().length > 0);
+    return filtered.length > 0 ? filtered : null;
   } catch {
     return null;
   }
@@ -110,7 +111,8 @@ function sanitizeStoredUrls(raw: string | null): LayerInput[] | null {
           label: typeof record.label === "string" ? record.label : "",
         };
       });
-    return sanitized.length > 0 ? sanitized : null;
+    const filtered = sanitized.filter((s) => s.path && s.path.trim().length > 0);
+    return filtered.length > 0 ? filtered : null;
   } catch {
     return null;
   }
@@ -131,7 +133,8 @@ function sanitizeStoredEntries(raw: string | null): LayerEntry[] | null {
           value: typeof record.value === "string" ? record.value : "",
         };
       });
-    return sanitized.length > 0 ? sanitized : null;
+    const filtered = sanitized.filter((s) => s.value && s.value.trim().length > 0);
+    return filtered.length > 0 ? filtered : null;
   } catch {
     return null;
   }
@@ -140,6 +143,10 @@ function sanitizeStoredEntries(raw: string | null): LayerEntry[] | null {
 export default function Home() {
   const queryRef = useRef<HTMLTextAreaElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [query, setQuery] = useState("");
   const [source, setSource] = useState<ChatSource>("openai");
   const [sourceModels, setSourceModels] = useState<SourceModelState>({
@@ -152,9 +159,7 @@ export default function Home() {
     claude?: string[];
     ollama?: string[];
   }>({});
-  const [layers, setLayers] = useState<LayerEntry[]>([
-    { kind: "path", value: "" },
-  ]);
+  const [layers, setLayers] = useState<LayerEntry[]>([]);
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -190,8 +195,14 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!mounted) return; // don't persist until we've loaded saved entries
     try {
-      localStorage.setItem(LAYER_ENTRY_STORAGE_KEY, JSON.stringify(layers));
+      const nonEmpty = layers.filter((l) => l.value && l.value.trim().length > 0);
+      if (nonEmpty.length > 0) {
+        localStorage.setItem(LAYER_ENTRY_STORAGE_KEY, JSON.stringify(nonEmpty));
+      } else {
+        localStorage.removeItem(LAYER_ENTRY_STORAGE_KEY);
+      }
     } catch {
       // Ignore storage errors (e.g., private mode or quota exceeded).
     }
@@ -450,64 +461,70 @@ export default function Home() {
                 Choose Path for local files or URL for website scraping.
               </p>
 
-              <div className="space-y-2">
-                {layers.map((layer, index) => (
-                  <div
-                    key={index}
-                    className="grid grid-cols-1 gap-2 rounded-md border border-muted p-3 md:grid-cols-[160px_1fr_auto]"
-                  >
-                    <div className="relative">
-                      <select
-                        value={layer.kind}
-                        onChange={(event) =>
-                          updateLayer(index, "kind", event.target.value as LayerEntry["kind"])
-                        }
-                        className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-10 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+              <div className="space-y-2" suppressHydrationWarning>
+                {!mounted ? (
+                  <div className="text-sm text-muted-foreground">Loading layers…</div>
+                ) : (
+                  <>
+                    {layers.map((layer, index) => (
+                      <div
+                        key={index}
+                        className="grid grid-cols-1 gap-2 rounded-md border border-muted p-3 md:grid-cols-[160px_1fr_auto]"
                       >
-                        <option value="path">Path</option>
-                        <option value="url">URL</option>
-                      </select>
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
-                        <FiChevronDown className="h-4 w-4" />
-                      </span>
+                        <div className="relative">
+                          <select
+                            value={layer.kind}
+                            onChange={(event) =>
+                              updateLayer(index, "kind", event.target.value as LayerEntry["kind"])
+                            }
+                            className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-10 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                          >
+                            <option value="path">Path</option>
+                            <option value="url">URL</option>
+                          </select>
+                          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
+                            <FiChevronDown className="h-4 w-4" />
+                          </span>
+                        </div>
+                        <input
+                          type={layer.kind === "url" ? "url" : "text"}
+                          value={layer.value}
+                          onChange={(event) =>
+                            updateLayer(index, "value", event.target.value)
+                          }
+                          className="rounded-md border border-muted bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                          placeholder={
+                            layer.kind === "url"
+                              ? "https://example.com/page"
+                              : layerPathExample(index)
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeLayer(index)}
+                          disabled={layers.length <= 1}
+                          title="Delete layer"
+                          aria-label="Delete layer"
+                          className="inline-flex items-center gap-2 rounded-md font-normal text-sm text-destructive px-2 py-2 cursor-pointer disabled:cursor-not-allowed transition-colors duration-300 ease-in-out hover:text-destructive/80 disabled:hover:text-destructive"
+                        >
+                          <FiMinusCircle />
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={addLayer}
+                        disabled={layers.length >= 6}
+                        className="inline-flex items-center gap-2 rounded-md border border-muted px-2 pr-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors duration-300 ease-in-out hover:text-foreground"
+                      >
+                        <FiPlus className="h-4 w-4" />
+                        Add item
+                      </button>
                     </div>
-                    <input
-                      type={layer.kind === "url" ? "url" : "text"}
-                      value={layer.value}
-                      onChange={(event) =>
-                        updateLayer(index, "value", event.target.value)
-                      }
-                      className="rounded-md border border-muted bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                      placeholder={
-                        layer.kind === "url"
-                          ? "https://example.com/page"
-                          : layerPathExample(index)
-                      }
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeLayer(index)}
-                      disabled={layers.length <= 1}
-                      title="Delete layer"
-                      aria-label="Delete layer"
-                      className="inline-flex items-center gap-2 rounded-md font-normal text-sm text-destructive px-2 py-2 cursor-pointer disabled:cursor-not-allowed transition-colors duration-300 ease-in-out hover:text-destructive/80 disabled:hover:text-destructive"
-                    >
-                      <FiMinusCircle />
-                      Remove
-                    </button>
-                  </div>
-                ))}
-                <div className="pt-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={addLayer}
-                    disabled={layers.length >= 6}
-                    className="inline-flex items-center gap-2 rounded-md border border-muted px-2 pr-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors duration-300 ease-in-out hover:text-foreground"
-                  >
-                    <FiPlus className="h-4 w-4" />
-                    Add item
-                  </button>
-                </div>
+                  </>
+                )}
               </div>
             </div>
 
