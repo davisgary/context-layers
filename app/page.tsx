@@ -6,196 +6,134 @@ import remarkGfm from "remark-gfm";
 import { FiArrowUp, FiPlus, FiMinusCircle, FiChevronDown, FiLoader } from "react-icons/fi";
 import Footer from "../components/Footer";
 
-type LayerInput = {
-  path: string;
-  label: string;
-};
-type LayerEntry = {
-  kind: "path" | "url";
-  value: string;
-};
+type LayerEntry = { kind: "path" | "url"; value: string };
 
-const LAYER_STORAGE_KEY = "layers:user-inputs";
-const URL_STORAGE_KEY = "layers:url-inputs";
+const LAYER_STORAGE_KEY = "layers:user-inputs"; // legacy
+const URL_STORAGE_KEY = "layers:url-inputs"; // legacy
 const LAYER_ENTRY_STORAGE_KEY = "layers:entries";
 
 type ChatSource = "openai" | "claude" | "ollama";
-type SourceModelState = {
-  openai: string;
-  claude: string;
-  ollama: string;
-};
+type SourceModelState = { openai: string; claude: string; ollama: string };
 
 const OPENAI_MODEL_OPTIONS = [
-  // Flagship
   "gpt-5.5",
   "gpt-5.5-instant",
   "gpt-5.4",
-  // Fast
   "gpt-5.3-instant",
-  // Small
   "gpt-5.4-mini",
   "gpt-5.4-nano",
   "gpt-4.1-mini",
   "gpt-4.1-nano",
-  // Coding
   "gpt-5.3-codex",
   "gpt-5.2-codex",
-  // Legacy
   "gpt-4.1",
 ];
+const CLAUDE_MODEL_OPTIONS = ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"];
+const OLLAMA_GEMMA_MODEL_OPTIONS = ["gemma4", "llama3.3", "qwen3.6", "qwen3-coder", "deepseek-r1", "phi4", "mistral-small3.2"];
 
-const CLAUDE_MODEL_OPTIONS = [
-  // Provided Claude model IDs
-  "claude-opus-4-7",
-  "claude-sonnet-4-6",
-  "claude-haiku-4-5-20251001",
-];
-
-const OLLAMA_GEMMA_MODEL_OPTIONS = [
-  // Prefer Gemma 4 as the default local model (no ":latest" tag).
-  "gemma4",
-  // Primary Ollama model options (kept in a stable order).
-  "llama3.3",
-  "qwen3.6",
-  "qwen3-coder",
-  "deepseek-r1",
-  "phi4",
-  "mistral-small3.2",
-];
-
-function layerName(index: number): string {
+function layerName(index: number) {
   if (index === 0) return "Layer 1";
   if (index === 1) return "Layer 2";
   if (index === 2) return "Layer 3";
   return `Layer ${index + 1}`;
 }
 
-function layerPathExample(_index: number): string {
-  // Generic example placeholder
+function layerPathExample(_index: number) {
   return "Documents/github/repo/SKILL.md";
 }
 
-function sanitizeStoredLayers(raw: string | null): LayerInput[] | null {
+function safeParseArray<T>(raw: string | null, mapper: (item: any) => T | null) {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
-    const sanitized = parsed
-      .filter((item) => item && typeof item === "object")
-      .map((item) => {
-        const record = item as Record<string, unknown>;
-        return {
-          path: typeof record.path === "string" ? record.path : "",
-          label: typeof record.label === "string" ? record.label : "",
-        };
-      });
-    const filtered = sanitized.filter((s) => s.path && s.path.trim().length > 0);
-    return filtered.length > 0 ? filtered : null;
+    const items = parsed
+      .map((it) => (it && typeof it === "object" ? mapper(it) : null))
+      .filter((x) => x !== null) as T[];
+    return items.length > 0 ? items : null;
   } catch {
     return null;
   }
 }
 
-function sanitizeStoredUrls(raw: string | null): LayerInput[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    const sanitized = parsed
-      .filter((item) => item && typeof item === "object")
-      .map((item) => {
-        const record = item as Record<string, unknown>;
-        return {
-          path: typeof record.url === "string" ? record.url : "",
-          label: typeof record.label === "string" ? record.label : "",
-        };
-      });
-    const filtered = sanitized.filter((s) => s.path && s.path.trim().length > 0);
-    return filtered.length > 0 ? filtered : null;
-  } catch {
-    return null;
-  }
+function sanitizeStoredLayers(raw: string | null) {
+  return safeParseArray(raw, (record: any) => {
+    const path = typeof record.path === "string" ? record.path.trim() : "";
+    const label = typeof record.label === "string" ? record.label.trim() : "";
+    if (!path) return null;
+    return { path, label };
+  });
+}
+
+function sanitizeStoredUrls(raw: string | null) {
+  return safeParseArray(raw, (record: any) => {
+    const url = typeof record.url === "string" ? record.url.trim() : "";
+    const label = typeof record.label === "string" ? record.label.trim() : "";
+    if (!url) return null;
+    return { url, label };
+  });
 }
 
 function sanitizeStoredEntries(raw: string | null): LayerEntry[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    const sanitized = parsed
-      .filter((item) => item && typeof item === "object")
-      .map((item) => {
-        const record = item as Record<string, unknown>;
-        const kind: LayerEntry["kind"] = record.kind === "url" ? "url" : "path";
-        return {
-          kind,
-          value: typeof record.value === "string" ? record.value : "",
-        };
-      });
-    const filtered = sanitized.filter((s) => s.value && s.value.trim().length > 0);
-    return filtered.length > 0 ? filtered : null;
-  } catch {
-    return null;
-  }
+  return safeParseArray(raw, (record: any) => {
+    const kind = record.kind === "url" ? "url" : "path";
+    const value = typeof record.value === "string" ? record.value.trim() : "";
+    if (!value) return null;
+    return { kind: kind as LayerEntry["kind"], value };
+  });
 }
 
 export default function Home() {
   const queryRef = useRef<HTMLTextAreaElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
+
   const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
   const [query, setQuery] = useState("");
   const [source, setSource] = useState<ChatSource>("openai");
   const [sourceModels, setSourceModels] = useState<SourceModelState>({
     openai: OPENAI_MODEL_OPTIONS[0],
     claude: CLAUDE_MODEL_OPTIONS[0],
-      ollama: OLLAMA_GEMMA_MODEL_OPTIONS[0],
+    ollama: OLLAMA_GEMMA_MODEL_OPTIONS[0],
   });
-  const [dynamicModels, setDynamicModels] = useState<{
-    openai?: string[];
-    claude?: string[];
-    ollama?: string[];
-  }>({});
+  const [dynamicModels, setDynamicModels] = useState<{ openai?: string[]; claude?: string[]; ollama?: string[] }>({});
+
   const [layers, setLayers] = useState<LayerEntry[]>([]);
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
 
+  // Load saved entries on mount (client-only) to avoid SSR/CSR mismatch.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const storedEntries = sanitizeStoredEntries(
-      localStorage.getItem(LAYER_ENTRY_STORAGE_KEY)
-    );
-    if (storedEntries && storedEntries.length > 0) {
-      setLayers(storedEntries);
-      return;
-    }
+    setMounted(true);
+    try {
+      const entries = sanitizeStoredEntries(localStorage.getItem(LAYER_ENTRY_STORAGE_KEY));
+      if (entries) {
+        setLayers(entries);
+        return;
+      }
 
-    const stored = sanitizeStoredLayers(localStorage.getItem(LAYER_STORAGE_KEY));
-    const storedUrls = sanitizeStoredUrls(localStorage.getItem(URL_STORAGE_KEY));
-    const merged: LayerEntry[] = [];
-    if (stored) {
-      merged.push(
-        ...stored.map((item) => ({ kind: "path" as const, value: item.path }))
-      );
-    }
-    if (storedUrls) {
-      merged.push(
-        ...storedUrls.map((item) => ({ kind: "url" as const, value: item.path }))
-      );
-    }
-    if (merged.length > 0) {
-      setLayers(merged);
+      // fallback to legacy keys (paths then urls)
+      const paths = sanitizeStoredLayers(localStorage.getItem(LAYER_STORAGE_KEY)) || [];
+      const urls = sanitizeStoredUrls(localStorage.getItem(URL_STORAGE_KEY)) || [];
+      const merged: LayerEntry[] = [];
+      merged.push(...paths.map((p) => ({ kind: "path" as const, value: p.path })));
+      merged.push(...urls.map((u) => ({ kind: "url" as const, value: u.url })));
+      if (merged.length > 0) {
+        setLayers(merged);
+        return;
+      }
+
+      // seed a single empty path entry when there are no saved entries
+      setLayers([{ kind: "path", value: "" }]);
+    } catch {
+      setLayers([{ kind: "path", value: "" }]);
     }
   }, []);
 
+  // Persist non-empty entries after mount only
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!mounted) return; // don't persist until we've loaded saved entries
+    if (!mounted) return;
     try {
       const nonEmpty = layers.filter((l) => l.value && l.value.trim().length > 0);
       if (nonEmpty.length > 0) {
@@ -204,80 +142,61 @@ export default function Home() {
         localStorage.removeItem(LAYER_ENTRY_STORAGE_KEY);
       }
     } catch {
-      // Ignore storage errors (e.g., private mode or quota exceeded).
+      // ignore
     }
-  }, [layers]);
+  }, [layers, mounted]);
 
   function addLayer() {
     setLayers((prev) => [...prev, { kind: "path", value: "" }]);
   }
 
   function removeLayer(index: number) {
-    setLayers((prev) => {
-      // Ensure at least one layer remains in the UI.
-      if (prev.length <= 1) return prev;
-      return prev.filter((_, i) => i !== index);
-    });
+    setLayers((prev) => prev.filter((_, i) => i !== index));
   }
 
   function updateLayer(index: number, field: keyof LayerEntry, value: string) {
-    setLayers((prev) =>
-      prev.map((layer, i) =>
-        i === index ? { ...layer, [field]: value } : layer
-      )
-    );
+    setLayers((prev) => prev.map((layer, i) => (i === index ? { ...layer, [field]: value } : layer)));
   }
 
   function currentModelOptions(): string[] {
-  if (source === "openai") return OPENAI_MODEL_OPTIONS;
-  if (source === "claude") return CLAUDE_MODEL_OPTIONS;
-  // Ollama primarily exposes Gemma model IDs; use that list in the UI.
-  return OLLAMA_GEMMA_MODEL_OPTIONS;
+    if (source === "openai") return OPENAI_MODEL_OPTIONS;
+    if (source === "claude") return CLAUDE_MODEL_OPTIONS;
+    return OLLAMA_GEMMA_MODEL_OPTIONS;
   }
 
   function currentModel(): string {
-  return sourceModels[source];
+    return sourceModels[source];
   }
 
   function updateCurrentModel(value: string) {
-  setSourceModels((prev) => ({ ...prev, [source]: value }));
+    setSourceModels((prev) => ({ ...prev, [source]: value }));
   }
 
   useEffect(() => {
-    let mounted = true;
+    let active = true;
     (async () => {
       try {
         const res = await fetch("/api/llm-health");
         if (!res.ok) return;
         const data = await res.json();
-        if (!mounted) return;
+        if (!active) return;
         setDynamicModels({
           openai: data.providers.openai.models,
           claude: data.providers.claude.models,
           ollama: data.providers.ollama.models,
         });
+
         const pickPreferred = (available: string[] | undefined, preferred: string[]) => {
           if (!available || available.length === 0) return undefined;
-          // Find the first preferred model that exists in the provider list
           for (const p of preferred) {
             if (available.includes(p)) return p;
           }
-          // Fall back to the provider's first model
           return available[0];
         };
 
-        const ollamaPick = pickPreferred(
-          data.providers.ollama.models,
-          OLLAMA_GEMMA_MODEL_OPTIONS
-        );
-        const openaiPick = pickPreferred(
-          data.providers.openai.models,
-          OPENAI_MODEL_OPTIONS
-        );
-        const claudePick = pickPreferred(
-          data.providers.claude.models,
-          CLAUDE_MODEL_OPTIONS
-        );
+        const ollamaPick = pickPreferred(data.providers.ollama.models, OLLAMA_GEMMA_MODEL_OPTIONS);
+        const openaiPick = pickPreferred(data.providers.openai.models, OPENAI_MODEL_OPTIONS);
+        const claudePick = pickPreferred(data.providers.claude.models, CLAUDE_MODEL_OPTIONS);
 
         setSourceModels((prev) => ({
           ...prev,
@@ -285,12 +204,12 @@ export default function Home() {
           ...(openaiPick ? { openai: openaiPick } : {}),
           ...(claudePick ? { claude: claudePick } : {}),
         }));
-      } catch (err) {
-        // ignore and keep static lists
+      } catch {
+        // ignore
       }
     })();
     return () => {
-      mounted = false;
+      active = false;
     };
   }, []);
 
@@ -311,7 +230,7 @@ export default function Home() {
         pathCount += 1;
         return { path: value, label };
       })
-      .filter((layer): layer is { path: string; label: string } => !!layer);
+      .filter((l): l is { path: string; label: string } => !!l);
 
     const payloadUrls = layers
       .filter((layer) => layer.kind === "url")
@@ -321,15 +240,12 @@ export default function Home() {
         urlCount += 1;
         return { url: value, label: `URL ${urlCount}` };
       })
-      .filter((item): item is { url: string; label: string } => !!item);
+      .filter((u): u is { url: string; label: string } => !!u);
 
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
+        headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({
           query,
           source,
@@ -370,59 +286,34 @@ export default function Home() {
               if (!line.startsWith("data:")) continue;
               const data = line.replace(/^data:\s*/, "").trim();
               if (!data) continue;
-              const payload = JSON.parse(data) as {
-                delta?: string;
-                done?: boolean;
-                error?: string;
-              };
-              if (payload.delta) {
-                setAnswer((prev) => prev + payload.delta);
-              }
-              if (payload.error) {
-                streamError = payload.error;
-              }
+              const payload = JSON.parse(data) as { delta?: string; done?: boolean; error?: string };
+              if (payload.delta) setAnswer((prev) => prev + payload.delta);
+              if (payload.error) streamError = payload.error;
             }
           }
         }
 
-        if (streamError) {
-          throw new Error(streamError);
-        }
-
+        if (streamError) throw new Error(streamError);
         return;
       }
 
       const data = (await response.json()) as { answer?: string };
       setAnswer(data.answer ?? "");
     } catch (submitError) {
-      const message =
-        submitError instanceof Error ? submitError.message : "Unexpected error.";
-      setError(message);
+      setError(submitError instanceof Error ? submitError.message : "Unexpected error.");
     } finally {
       setIsLoading(false);
     }
   }
 
   useEffect(() => {
-    // Loading messages
-    const messages = [
-      "Getting layer data...",
-      "Summarizing context...",
-      "Retrieving answer...",
-    ];
+    const messages = ["Getting layer data...", "Summarizing context...", "Retrieving answer..."];
     let t1: number | undefined;
     let t2: number | undefined;
     if (isLoading) {
-      // Start with the first message immediately.
       setLoadingText(messages[0]);
-      // Second message.
-      t1 = window.setTimeout(() => {
-        setLoadingText(messages[1]);
-      }, 3000);
-      // Final message.
-      t2 = window.setTimeout(() => {
-        setLoadingText(messages[2]);
-      }, 6000);
+      t1 = window.setTimeout(() => setLoadingText(messages[1]), 3000);
+      t2 = window.setTimeout(() => setLoadingText(messages[2]), 6000);
     } else {
       setLoadingText("");
     }
@@ -435,9 +326,7 @@ export default function Home() {
   function handleQueryChange(value: string) {
     setQuery(value);
     const textarea = queryRef.current;
-    if (!textarea) {
-      return;
-    }
+    if (!textarea) return;
     textarea.style.height = "0px";
     textarea.style.height = `${textarea.scrollHeight}px`;
   }
@@ -448,211 +337,96 @@ export default function Home() {
         <div className="w-full max-w-3xl space-y-6">
           <h1 className="text-2xl font-semibold text-center">Let's go deeper</h1>
 
-          <form
-            ref={formRef}
-            onSubmit={handleSubmit}
-            className="space-y-4 rounded-lg border border-muted bg-card p-4"
-          >
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-muted bg-card p-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-medium">Layers</h2>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Choose Path for local files or URL for website scraping.
-              </p>
+              <p className="text-xs text-muted-foreground">Choose Path for local files or URL for website scraping.</p>
 
               <div className="space-y-2" suppressHydrationWarning>
                 {!mounted ? (
                   <div className="text-sm text-muted-foreground">Loading layers…</div>
                 ) : (
                   <>
-                    {layers.map((layer, index) => (
-                      <div
-                        key={index}
-                        className="grid grid-cols-1 gap-2 rounded-md border border-muted p-3 md:grid-cols-[160px_1fr_auto]"
-                      >
-                        <div className="relative">
-                          <select
-                            value={layer.kind}
-                            onChange={(event) =>
-                              updateLayer(index, "kind", event.target.value as LayerEntry["kind"])
-                            }
-                            className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-10 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                          >
-                            <option value="path">Path</option>
-                            <option value="url">URL</option>
-                          </select>
-                          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
-                            <FiChevronDown className="h-4 w-4" />
-                          </span>
-                        </div>
-                        <input
-                          type={layer.kind === "url" ? "url" : "text"}
-                          value={layer.value}
-                          onChange={(event) =>
-                            updateLayer(index, "value", event.target.value)
-                          }
-                          className="rounded-md border border-muted bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                          placeholder={
-                            layer.kind === "url"
-                              ? "https://example.com/page"
-                              : layerPathExample(index)
-                          }
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeLayer(index)}
-                          disabled={layers.length <= 1}
-                          title="Delete layer"
-                          aria-label="Delete layer"
-                          className="inline-flex items-center gap-2 rounded-md font-normal text-sm text-destructive px-2 py-2 cursor-pointer disabled:cursor-not-allowed transition-colors duration-300 ease-in-out hover:text-destructive/80 disabled:hover:text-destructive"
-                        >
-                          <FiMinusCircle />
-                          Remove
+                    {layers.length === 0 ? (
+                      <div className="pt-2 flex justify-end">
+                        <button type="button" onClick={addLayer} className="inline-flex items-center gap-2 rounded-md border border-muted px-2 pr-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors duration-300 ease-in-out hover:text-foreground">
+                          <FiPlus className="h-4 w-4" />
+                          Add item
                         </button>
                       </div>
-                    ))}
-                    <div className="pt-2 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={addLayer}
-                        disabled={layers.length >= 6}
-                        className="inline-flex items-center gap-2 rounded-md border border-muted px-2 pr-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors duration-300 ease-in-out hover:text-foreground"
-                      >
-                        <FiPlus className="h-4 w-4" />
-                        Add item
-                      </button>
-                    </div>
+                    ) : (
+                      layers.map((layer, index) => (
+                        <div key={index} className="grid grid-cols-1 gap-2 rounded-md border border-muted p-3 md:grid-cols-[160px_1fr_auto]">
+                          <div className="relative">
+                            <select value={layer.kind} onChange={(e) => updateLayer(index, "kind", e.target.value as LayerEntry["kind"])} className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-10 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent">
+                              <option value="path">Path</option>
+                              <option value="url">URL</option>
+                            </select>
+                            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground"><FiChevronDown className="h-4 w-4" /></span>
+                          </div>
+                          <input type={layer.kind === "url" ? "url" : "text"} value={layer.value} onChange={(e) => updateLayer(index, "value", e.target.value)} className="rounded-md border border-muted bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" placeholder={layer.kind === "url" ? "https://example.com/page" : layerPathExample(index)} />
+                          <button type="button" onClick={() => removeLayer(index)} title="Delete layer" aria-label="Delete layer" className="inline-flex items-center gap-2 rounded-md font-normal text-sm text-destructive px-2 py-2 cursor-pointer transition-colors duration-300 ease-in-out hover:text-destructive/80"><FiMinusCircle /> Remove</button>
+                        </div>
+                      ))
+                    )}
                   </>
                 )}
               </div>
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="source" className="block text-sm font-medium">
-                AI Source
-              </label>
+              <label htmlFor="source" className="block text-sm font-medium">AI Source</label>
               <div className="relative">
-                <select
-                  id="source"
-                  value={source}
-                  onChange={(event) => setSource(event.target.value as ChatSource)}
-                  className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-12 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                >
+                <select id="source" value={source} onChange={(e) => setSource(e.target.value as ChatSource)} className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-12 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent">
                   <option value="openai">OpenAI API</option>
                   <option value="claude">Claude API</option>
                   <option value="ollama">Ollama</option>
                 </select>
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
-                  <FiChevronDown className="h-4 w-4" />
-                </span>
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground"><FiChevronDown className="h-4 w-4" /></span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Provider credentials are configured server-side only.
-              </p>
+              <p className="text-xs text-muted-foreground">Provider credentials are configured server-side only.</p>
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="model" className="block text-sm font-medium">
-                Model
-              </label>
+              <label htmlFor="model" className="block text-sm font-medium">Model</label>
               <div className="relative">
-                <select
-                  id="model"
-                  value={currentModel()}
-                  onChange={(event) => updateCurrentModel(event.target.value)}
-                  className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-12 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                >
-                  {(dynamicModels[source] && dynamicModels[source]!.length > 0
-                    ? dynamicModels[source]
-                    : currentModelOptions()
-                  ).map((modelId) => (
-                    <option key={modelId} value={modelId}>
-                      {modelId}
-                    </option>
+                <select id="model" value={currentModel()} onChange={(e) => updateCurrentModel(e.target.value)} className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-12 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent">
+                  {(dynamicModels[source] && dynamicModels[source]!.length > 0 ? dynamicModels[source] : currentModelOptions()).map((modelId) => (
+                    <option key={modelId} value={modelId}>{modelId}</option>
                   ))}
                 </select>
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground">
-                  <FiChevronDown className="h-4 w-4" />
-                </span>
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground"><FiChevronDown className="h-4 w-4" /></span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Latest models are listed first.
-              </p>
+              <p className="text-xs text-muted-foreground">Latest models are listed first.</p>
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="query" className="block text-sm font-medium">
-                Query
-              </label>
+              <label htmlFor="query" className="block text-sm font-medium">Query</label>
               <div className="relative">
-                <textarea
-                  ref={queryRef}
-                  id="query"
-                  value={query}
-                  onChange={(event) => handleQueryChange(event.target.value)}
-                  onKeyDown={(event) => {
-                    // Submit the form when Enter is pressed without Shift.
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      // Prevent inserting a newline.
-                      event.preventDefault();
-                      // Use requestSubmit if available to trigger form validation and onSubmit.
-                      if (formRef.current) {
-                        // requestSubmit is preferred because it triggers the form's submit event
-                        // and respects the type="submit" button behavior.
-                        if (typeof formRef.current.requestSubmit === "function") {
-                          formRef.current.requestSubmit();
-                        } else {
-                          // Fallback for older browsers.
-                          formRef.current.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
-                        }
-                      }
+                <textarea ref={queryRef} id="query" value={query} onChange={(e) => handleQueryChange(e.target.value)} onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    if (formRef.current) {
+                      if (typeof formRef.current.requestSubmit === "function") formRef.current.requestSubmit();
+                      else formRef.current.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
                     }
-                  }}
-                  className="min-h-20 w-full resize-none overflow-hidden rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                  placeholder="Ask your question..."
-                  required
-                />
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  title="Submit"
-                  aria-label="Submit"
-                  aria-busy={isLoading}
-                  className={
-                    `mb-1 absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-60 transition-colors duration-300 ease-in-out` +
-                    (query.trim().length > 0
-                      ? " hover:bg-primary/90 cursor-pointer"
-                      : " cursor-default")
                   }
-                >
-                  {isLoading ? (
-                    <FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <FiArrowUp className="h-4 w-4" />
-                  )}
+                }} className="min-h-20 w-full resize-none overflow-hidden rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" placeholder="Ask your question..." required />
+                <button type="submit" disabled={isLoading} title="Submit" aria-label="Submit" aria-busy={isLoading} className={`mb-1 absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-60 transition-colors duration-300 ease-in-out${query.trim().length > 0 ? " hover:bg-primary/90 cursor-pointer" : " cursor-default"}`}>
+                  {isLoading ? <FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" /> : <FiArrowUp className="h-4 w-4" />}
                 </button>
               </div>
-              {isLoading && loadingText ? (
-                <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-                  <FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  {loadingText}
-                </p>
-              ) : null}
+              {isLoading && loadingText ? <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />{loadingText}</p> : null}
             </div>
           </form>
 
-          {error ? (
-            <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </div>
-          ) : null}
+          {error ? <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
 
           {answer ? (
             <div className="space-y-4 rounded-lg border border-muted bg-card p-6">
-              <div className="prose max-w-none text-base break-words">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown>
-              </div>
+              <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown></div>
             </div>
           ) : null}
         </div>
