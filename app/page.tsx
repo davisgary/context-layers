@@ -458,8 +458,7 @@ export default function Home() {
                   title="Submit"
                   aria-label="Submit"
                   aria-busy={isLoading}
-                  style={{ background: `linear-gradient(90deg, hsl(var(--accent-foreground)) 0%, hsl(var(--accent)) 100%)` }}
-                  className={`mb-1 absolute bottom-2 right-2 inline-flex h-10 w-10 items-center justify-center rounded-lg text-white shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition transform duration-200 ease-out${query.trim().length > 0 ? " hover:-translate-y-0.5 hover:scale-105 hover:shadow-xl active:scale-95 cursor-pointer" : " cursor-default"}`}
+                  className={`mb-1 absolute bottom-2 right-2 inline-flex h-10 w-10 items-center justify-center rounded-lg shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition transform duration-200 ease-out bg-primary text-primary-foreground${query.trim().length > 0 ? " hover:bg-primary/70 hover:-translate-y-0.5 hover:scale-105 hover:shadow-xl active:scale-95 cursor-pointer" : " cursor-default"}`}
                 >
                   {isLoading ? (
                     <FiLoader className="h-[21px] w-[21px] animate-spin" aria-hidden="true" />
