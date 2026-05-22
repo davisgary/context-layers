@@ -17,7 +17,7 @@
     --muted: 0 0% 93%;
     --muted-foreground: 240 4% 28%;
     --accent: 228 100% 40%;
-    --accent-foreground: 228 100% 50%;
+    --accent-foreground: 228 100% 29%;
     --destructive: 0 100% 32%;
     --success: 120 100% 20%;
     --radius: 1rem;
@@ -38,7 +38,7 @@
     --muted: 0 0% 23%;
     --muted-foreground: 0 0% 75%;
     --accent: 228 100% 40%;
-    --accent-foreground: 228 100% 50%;
+    --accent-foreground: 228 100% 20%;
     --destructive: 0 97% 74%;
     --success: 120 46% 53%;
     --shadow: 0 0 6px rgba(255, 255, 255, 0.3);
