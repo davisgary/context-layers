@@ -338,7 +338,7 @@ export default function Home() {
           <h1 className="text-center text-3xl font-semibold tracking-tight">Let's go deeper</h1>
 
           <form ref={formRef} onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-muted bg-card/90 p-5 shadow-sm">
-            <div className="space-y-3 rounded-xl bg-gradient-to-b from-background to-muted/30 p-4">
+            <div className="space-y-3 rounded-xl p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-semibold tracking-wide">Layers</h2>
