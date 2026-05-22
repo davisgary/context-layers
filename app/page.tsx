@@ -453,7 +453,7 @@ export default function Home() {
                   }
                 }} className="min-h-24 w-full resize-none overflow-hidden rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" placeholder="Ask your question..." required />
                 <button type="submit" disabled={isLoading} title="Submit" aria-label="Submit" aria-busy={isLoading} className={`mb-1 absolute bottom-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-60 transition-colors duration-300 ease-in-out${query.trim().length > 0 ? " hover:bg-primary/90 cursor-pointer" : " cursor-default"}`}>
-                  {isLoading ? <FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" /> : <FiArrowUp className="h-4 w-4" />}
+                  {isLoading ? <FiLoader className="h-[21px] w-[21px] animate-spin" aria-hidden="true" /> : <FiArrowUp className="h-[21px] w-[21px]" />}
                 </button>
               </div>
               {isLoading && loadingText ? <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />{loadingText}</p> : null}
