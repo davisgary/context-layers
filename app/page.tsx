@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { FiArrowUp, FiPlus, FiMinusCircle, FiChevronDown, FiLoader } from "react-icons/fi";
+import { FiArrowUp, FiPlus, FiChevronDown, FiLoader, FiTrash2 } from "react-icons/fi";
 import Footer from "../components/Footer";
 
 type LayerEntry = { kind: "path" | "url"; value: string };
@@ -334,40 +334,78 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen">
       <div className="flex-grow flex justify-center px-4 py-10">
-        <div className="w-full max-w-3xl space-y-6">
-          <h1 className="text-2xl font-semibold text-center">Let's go deeper</h1>
+        <div className="w-full max-w-4xl space-y-6">
+          <h1 className="text-center text-3xl font-semibold tracking-tight">Let's go deeper</h1>
 
-          <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-muted bg-card p-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-medium">Layers</h2>
+          <form ref={formRef} onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-muted bg-card/90 p-5 shadow-sm">
+            <div className="space-y-3 rounded-xl">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold tracking-wide">Layers</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">Attach local file paths or scrape URLs as context.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addLayer}
+                  className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium transition-colors duration-300 ease-in-out hover:bg-muted"
+                >
+                  <FiPlus className="h-4 w-4" />
+                  Add item
+                </button>
               </div>
-              <p className="text-xs text-muted-foreground">Choose Path for local files or URL for website scraping.</p>
 
-              <div className="space-y-2" suppressHydrationWarning>
+              <div className="space-y-3" suppressHydrationWarning>
                 {!mounted ? (
                   <div className="text-sm text-muted-foreground">Loading layers…</div>
                 ) : (
                   <>
                     {layers.length === 0 ? (
-                      <div className="pt-2 flex justify-end">
-                        <button type="button" onClick={addLayer} className="inline-flex items-center gap-2 rounded-md border border-muted px-2 pr-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors duration-300 ease-in-out hover:text-foreground">
-                          <FiPlus className="h-4 w-4" />
-                          Add item
-                        </button>
+                      <div className="rounded-lg border border-dashed border-muted bg-background/80 p-6 text-center text-sm text-muted-foreground">
+                        No context items yet. Add your first path or URL.
                       </div>
                     ) : (
                       layers.map((layer, index) => (
-                        <div key={index} className="grid grid-cols-1 gap-2 rounded-md border border-muted p-3 md:grid-cols-[160px_1fr_auto]">
-                          <div className="relative">
-                            <select value={layer.kind} onChange={(e) => updateLayer(index, "kind", e.target.value as LayerEntry["kind"])} className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-10 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-accent">
-                              <option value="path">Path</option>
-                              <option value="url">URL</option>
-                            </select>
-                            <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground"><FiChevronDown className="h-4 w-4" /></span>
+                        <div key={index} className="space-y-3 rounded-xl border border-muted bg-background/90 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{layerName(index)}</div>
+                            <button
+                              type="button"
+                              onClick={() => removeLayer(index)}
+                              title="Delete layer"
+                              aria-label="Delete layer"
+                              className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm text-destructive transition-colors duration-300 ease-in-out hover:bg-destructive/10"
+                            >
+                              <FiTrash2 className="h-4 w-4" />
+                              Remove
+                            </button>
                           </div>
-                          <input type={layer.kind === "url" ? "url" : "text"} value={layer.value} onChange={(e) => updateLayer(index, "value", e.target.value)} className="rounded-md border border-muted bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" placeholder={layer.kind === "url" ? "https://example.com/page" : layerPathExample(index)} />
-                          <button type="button" onClick={() => removeLayer(index)} title="Delete layer" aria-label="Delete layer" className="inline-flex items-center gap-2 rounded-md font-normal text-sm text-destructive px-2 py-2 cursor-pointer transition-colors duration-300 ease-in-out hover:text-destructive/80"><FiMinusCircle /> Remove</button>
+
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr] sm:items-center">
+                            <div className="inline-flex rounded-lg border border-muted bg-muted/40 p-1">
+                              <button
+                                type="button"
+                                onClick={() => updateLayer(index, "kind", "path")}
+                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${layer.kind === "path" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                              >
+                                Path
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateLayer(index, "kind", "url")}
+                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${layer.kind === "url" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                              >
+                                URL
+                              </button>
+                            </div>
+
+                            <input
+                              type={layer.kind === "url" ? "url" : "text"}
+                              value={layer.value}
+                              onChange={(e) => updateLayer(index, "value", e.target.value)}
+                              className="w-full rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                              placeholder={layer.kind === "url" ? "https://example.com/page" : layerPathExample(index)}
+                            />
+                          </div>
                         </div>
                       ))
                     )}
@@ -415,7 +453,7 @@ export default function Home() {
                   }
                 }} className="min-h-24 w-full resize-none overflow-hidden rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" placeholder="Ask your question..." required />
                 <button type="submit" disabled={isLoading} title="Submit" aria-label="Submit" aria-busy={isLoading} className={`mb-1 absolute bottom-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-60 transition-colors duration-300 ease-in-out${query.trim().length > 0 ? " hover:bg-primary/90 cursor-pointer" : " cursor-default"}`}>
-                  {isLoading ? <FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" /> : <FiArrowUp className="h-4 w-4" />}
+                  {isLoading ? <FiLoader className="h-[21px] w-[21px] animate-spin" aria-hidden="true" /> : <FiArrowUp className="h-[21px] w-[21px]" />}
                 </button>
               </div>
               {isLoading && loadingText ? <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />{loadingText}</p> : null}
