@@ -195,6 +195,21 @@ export default function Home() {
     setEditingTitleValue("");
   }
 
+  // Close the layer menu when clicking outside of it
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent) {
+      if (menuOpenIndex === null) return;
+      const target = e.target as Element | null;
+      if (!target) return;
+      // if the click is inside the menu or the menu button, do nothing
+      if (target.closest('.layer-menu') || target.closest('.layer-menu-button')) return;
+      setMenuOpenIndex(null);
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [menuOpenIndex]);
+
   // Load saved entries on mount (client-only) to avoid SSR/CSR mismatch.
   useEffect(() => {
     setMounted(true);
@@ -585,7 +600,7 @@ export default function Home() {
                         {/* Left: titles list */}
                         <div className="col-span-1 space-y-2">
                           {layers.map((layer, index) => (
-                            <div key={index} onClick={() => setSelectedLayerIndex(index)} className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-accent bg-muted" : "border-transparent hover:border-muted"}`}>
+                            <div key={index} onClick={() => setSelectedLayerIndex(index)} className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-accent/40 bg-muted/40" : "border-transparent hover:bg-muted/40 transition-colors duration-300"}`}>
                               <div className="flex-1 text-sm font-medium">
                                 {editingTitleIndex === index ? (
                                   <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
@@ -601,9 +616,9 @@ export default function Home() {
                               </div>
                               {editingTitleIndex !== index && (
                                 <div className="ml-2 relative">
-                                  <button aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted"><FiMoreVertical /></button>
+                                  <button aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted layer-menu-button"><FiMoreVertical /></button>
                                   {menuOpenIndex === index && (
-                                    <div className="absolute right-0 mt-2 w-36 rounded-md border bg-card p-0 z-10 overflow-hidden">
+                                    <div className="absolute right-0 mt-2 w-36 rounded-md border bg-card p-0 z-10 overflow-hidden layer-menu">
                                       <button className="w-full text-left px-3 py-2 text-sm hover:bg-muted rounded-t-md" onClick={() => startRenaming(index)}>Rename</button>
                                       <button className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-muted rounded-b-md" onClick={() => removeLayer(index)}>Remove</button>
                                     </div>
