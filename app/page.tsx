@@ -139,9 +139,7 @@ function NoteInlineEditor({
       <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm" />
       <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Note body..." className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm min-h-[80px]" />
       <div className="flex items-center justify-end gap-2">
-        <button type="button" onClick={save} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-1 text-xs font-medium hover:bg-muted">
-          Save
-        </button>
+        <button type="button" onClick={save} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-1 text-xs font-medium hover:bg-muted">Save</button>
         <button type="button" onClick={onDelete} className="text-xs text-destructive">Clear</button>
       </div>
     </div>
@@ -173,6 +171,8 @@ export default function Home() {
   const [menuOpenIndex, setMenuOpenIndex] = useState<number | null>(null);
   const [editingTitleIndex, setEditingTitleIndex] = useState<number | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState("");
+  // selected layer shown in the right panel
+  const [selectedLayerIndex, setSelectedLayerIndex] = useState<number>(0);
 
   function openMenuFor(index: number) {
     setMenuOpenIndex((p) => (p === index ? null : index));
@@ -211,9 +211,9 @@ export default function Home() {
       // fallback to legacy keys (paths then urls)
       const paths = sanitizeStoredLayers(localStorage.getItem(LAYER_STORAGE_KEY)) || [];
       const urls = sanitizeStoredUrls(localStorage.getItem(URL_STORAGE_KEY)) || [];
-  const merged: LayerEntry[] = [];
-  merged.push(...paths.map((p, i) => ({ kind: "path" as const, value: p.path, label: p.label ?? layerName(i) })));
-  merged.push(...urls.map((u, i) => ({ kind: "url" as const, value: u.url, label: u.label ?? undefined })));
+      const merged: LayerEntry[] = [];
+      merged.push(...paths.map((p, i) => ({ kind: "path" as const, value: p.path, label: p.label ?? layerName(i) })));
+      merged.push(...urls.map((u, i) => ({ kind: "url" as const, value: u.url, label: u.label ?? undefined })));
       if (merged.length > 0) {
         setLayers(merged);
         return;
@@ -252,22 +252,44 @@ export default function Home() {
     }
   }, [notes, mounted]);
 
-  // removed addLayer (use addPathLayer/addUrlLayer/addNoteLayer instead)
-
+  // add/remove helpers now manage selection for single-pane view
   function addPathLayer() {
-    setLayers((prev) => [...prev, { kind: "path", value: "", label: layerName(prev.filter(l=>l.kind==='path').length) }]);
+    setLayers((prev) => {
+      const next = [...prev, ({ kind: "path", value: "", label: layerName(prev.filter((l) => l.kind === "path").length) } as LayerEntry)];
+      setSelectedLayerIndex(next.length - 1);
+      return next;
+    });
   }
 
   function addUrlLayer() {
-    setLayers((prev) => [...prev, { kind: "url", value: "", label: undefined }]);
+    setLayers((prev) => {
+      const next = [...prev, ({ kind: "url", value: "", label: undefined } as LayerEntry)];
+      setSelectedLayerIndex(next.length - 1);
+      return next;
+    });
   }
 
   function addNoteLayer() {
-    setLayers((prev) => [...prev, { kind: "note", value: "", label: undefined }]);
+    setLayers((prev) => {
+      const next = [...prev, ({ kind: "note", value: "", label: undefined } as LayerEntry)];
+      setSelectedLayerIndex(next.length - 1);
+      return next;
+    });
   }
 
   function removeLayer(index: number) {
-    setLayers((prev) => prev.filter((_, i) => i !== index));
+    setLayers((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      // adjust selected index
+      if (next.length === 0) {
+        setSelectedLayerIndex(0);
+      } else if (selectedLayerIndex >= next.length) {
+        setSelectedLayerIndex(next.length - 1);
+      } else if (index === selectedLayerIndex) {
+        setSelectedLayerIndex(Math.max(0, selectedLayerIndex - 1));
+      }
+      return next;
+    });
   }
 
   function updateLayer(index: number, field: keyof LayerEntry, value: string) {
@@ -315,7 +337,7 @@ export default function Home() {
     // only add if not already present
     setLayers((prev) => {
       if (prev.some((p) => p.kind === "note" && p.value === id)) return prev;
-      return [...prev, { kind: "note", value: id }];
+      return [...prev, { kind: "note", value: id } as LayerEntry];
     });
   }
 
@@ -557,122 +579,92 @@ export default function Home() {
                 ) : (
                   <>
                     {layers.length === 0 ? (
-                      <div className="rounded-lg border border-dashed border-muted bg-background/80 p-6 text-center text-sm text-muted-foreground">
-                        No context items yet. Add your first path or URL.
-                      </div>
+                      <div className="rounded-lg border border-dashed border-muted bg-background/80 p-6 text-center text-sm text-muted-foreground">No context items yet. Add your first path or URL.</div>
                     ) : (
-                      layers.map((layer, index) => (
-                        <div key={index} className="space-y-3 rounded-xl border border-muted bg-background/90 px-4 pb-4 pt-2">
-                          <div className="space-y-1">
-                            <div className="flex items-start gap-3">
-                              {/* Left column: title + menu */}
-                              <div className="w-48 flex-shrink-0">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1">
-                                    {editingTitleIndex === index ? (
-                                      <div className="flex gap-2">
-                                        <input
-                                          value={editingTitleValue}
-                                          onChange={(e) => setEditingTitleValue(e.target.value)}
-                                          className="flex-1 rounded-md border px-2 py-1 text-sm"
-                                        />
-                                        <button className="px-2 text-sm" onClick={() => saveRename(index)}>Save</button>
-                                        <button className="px-2 text-sm text-muted" onClick={cancelRename}>Cancel</button>
-                                      </div>
-                                    ) : (
-                                      <div className="text-sm font-semibold">{layer.label ?? kindPlaceholder(layers, index, layer.kind)}</div>
-                                    )}
+                      <div className="grid grid-cols-3 gap-4">
+                        {/* Left: titles list */}
+                        <div className="col-span-1 space-y-2">
+                          {layers.map((layer, index) => (
+                            <div key={index} onClick={() => setSelectedLayerIndex(index)} className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-accent bg-muted" : "border-transparent hover:border-muted"}`}>
+                              <div className="flex-1 text-sm font-medium">{layer.label ?? kindPlaceholder(layers, index, layer.kind)}</div>
+                              <div className="ml-2 relative">
+                                <button aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted"><FiMoreVertical /></button>
+                                {menuOpenIndex === index && (
+                                  <div className="absolute right-0 mt-2 w-36 rounded-md border bg-card p-1 z-10">
+                                    <button className="w-full text-left px-2 py-1 text-sm hover:bg-muted" onClick={() => startRenaming(index)}>Rename</button>
+                                    <button className="w-full text-left px-2 py-1 text-sm text-destructive hover:bg-muted" onClick={() => removeLayer(index)}>Remove</button>
                                   </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
 
-                                  <div className="ml-2 relative">
-                                    <button aria-label="Layer menu" onClick={() => openMenuFor(index)} className="p-1 rounded hover:bg-muted">
-                                      <FiMoreVertical />
-                                    </button>
-                                    {menuOpenIndex === index && (
-                                      <div className="absolute right-0 mt-2 w-36 rounded-md border bg-card p-1 z-10">
-                                        <button className="w-full text-left px-2 py-1 text-sm hover:bg-muted" onClick={() => startRenaming(index)}>Rename</button>
-                                        <button className="w-full text-left px-2 py-1 text-sm text-destructive hover:bg-muted" onClick={() => removeLayer(index)}>Remove</button>
-                                      </div>
-                                    )}
-                                  </div>
+                        {/* Right: detail editor for selected layer */}
+                        <div className="col-span-2">
+                          {layers[selectedLayerIndex] ? (
+                            <div className="space-y-3 rounded-xl border border-muted bg-background/90 px-4 pb-4 pt-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  {editingTitleIndex === selectedLayerIndex ? (
+                                    <div className="flex gap-2">
+                                      <input value={editingTitleValue} onChange={(e) => setEditingTitleValue(e.target.value)} className="flex-1 rounded-md border px-2 py-1 text-sm" />
+                                      <button className="px-2 text-sm" onClick={() => saveRename(selectedLayerIndex)}>Save</button>
+                                      <button className="px-2 text-sm text-muted" onClick={cancelRename}>Cancel</button>
+                                    </div>
+                                  ) : (
+                                    <div className="text-sm font-semibold">{layers[selectedLayerIndex].label ?? kindPlaceholder(layers, selectedLayerIndex, layers[selectedLayerIndex].kind)}</div>
+                                  )}
+                                </div>
+
+                                <div className="ml-2 relative">
+                                  <button aria-label="Layer menu" onClick={() => openMenuFor(selectedLayerIndex)} className="p-1 rounded hover:bg-muted"><FiMoreVertical /></button>
+                                  {menuOpenIndex === selectedLayerIndex && (
+                                    <div className="absolute right-0 mt-2 w-36 rounded-md border bg-card p-1 z-10">
+                                      <button className="w-full text-left px-2 py-1 text-sm hover:bg-muted" onClick={() => startRenaming(selectedLayerIndex)}>Rename</button>
+                                      <button className="w-full text-left px-2 py-1 text-sm text-destructive hover:bg-muted" onClick={() => removeLayer(selectedLayerIndex)}>Remove</button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
-                              {/* Right column: value / note editor */}
-                              <div className="flex-1">
-                                {/* the existing value input/note editor markup below will handle content */}
+                              <div className="flex items-center gap-3">
+                                {layers[selectedLayerIndex].kind === "note" ? (
+                                  <div className="flex-1" />
+                                ) : (
+                                  <input type={layers[selectedLayerIndex].kind === "url" ? "url" : "text"} value={layers[selectedLayerIndex].value} onChange={(e) => updateLayer(selectedLayerIndex, "value", e.target.value)} className="flex-1 rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" placeholder={layers[selectedLayerIndex].kind === "url" ? "https://example.com/page" : layerPathExample(selectedLayerIndex)} />
+                                )}
                               </div>
-                            </div>
 
-                            <div className="flex items-center gap-3">
-                              {layer.kind === "note" ? (
-                                <div className="flex-1" />
-                              ) : (
-                                <input
-                                  type={layer.kind === "url" ? "url" : "text"}
-                                  value={layer.value}
-                                  onChange={(e) => updateLayer(index, "value", e.target.value)}
-                                  className="flex-1 rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                                  placeholder={layer.kind === "url" ? "https://example.com/page" : layerPathExample(index)}
-                                />
-                              )}
-                            </div>
-                          </div>
-
-                          {/* notes show a compact body editor below the row; title remains the single label field */}
-                          {layer.kind === "note" ? (
-                            <div className="mt-3 space-y-2">
-                              <textarea
-                                value={(() => {
-                                  const note = notes.find((n) => n.id === layer.value);
-                                  return note ? note.body : layer.value;
-                                })()}
-                                onChange={(e) => updateLayer(index, "value", e.target.value)}
-                                placeholder="Note body..."
-                                className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm min-h-[80px]"
-                              />
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const content = (() => {
-                                      const note = notes.find((n) => n.id === layer.value);
-                                      return note ? note.body : layer.value;
-                                    })();
-                                    const title = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : "Untitled";
-                                    const existing = notes.find((n) => n.id === layer.value);
-                                    if (existing) {
-                                      // update existing note
-                                      const updated: Note = { ...existing, title: title || existing.title, body: content };
-                                      setNotes((prev) => prev.map((n) => (n.id === existing.id ? updated : n)));
-                                      updateLayer(index, "value", existing.id);
-                                    } else {
-                                      // create new note and attach
-                                      const created = createNote(title, content);
-                                      updateLayer(index, "value", created.id);
-                                    }
-                                  }}
-                                  className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-1 text-xs font-medium hover:bg-muted"
-                                >
-                                  Save
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const existing = notes.find((n) => n.id === layer.value);
-                                    if (existing) deleteNote(existing.id);
-                                    updateLayer(index, "value", "");
-                                  }}
-                                  className="text-xs text-destructive"
-                                >
-                                  Clear
-                                </button>
-                              </div>
+                              {layers[selectedLayerIndex].kind === "note" ? (
+                                <div className="mt-3 space-y-2">
+                                  <textarea value={((): string => { const note = notes.find((n) => n.id === layers[selectedLayerIndex].value); return note ? note.body : layers[selectedLayerIndex].value; })()} onChange={(e) => updateLayer(selectedLayerIndex, "value", e.target.value)} placeholder="Note body..." className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm min-h-[80px]" />
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button type="button" onClick={() => {
+                                      const content = ((): string => { const note = notes.find((n) => n.id === layers[selectedLayerIndex].value); return note ? note.body : layers[selectedLayerIndex].value; })();
+                                      const title = (typeof layers[selectedLayerIndex].label === "string" && layers[selectedLayerIndex].label!.trim().length > 0) ? layers[selectedLayerIndex].label! : "Untitled";
+                                      const existing = notes.find((n) => n.id === layers[selectedLayerIndex].value);
+                                      if (existing) {
+                                        const updated: Note = { ...existing, title: title || existing.title, body: content };
+                                        setNotes((prev) => prev.map((n) => (n.id === existing.id ? updated : n)));
+                                        updateLayer(selectedLayerIndex, "value", existing.id);
+                                      } else {
+                                        const created = createNote(title, content);
+                                        updateLayer(selectedLayerIndex, "value", created.id);
+                                      }
+                                    }} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-1 text-xs font-medium hover:bg-muted">Save</button>
+                                    <button type="button" onClick={() => {
+                                      const existing = notes.find((n) => n.id === layers[selectedLayerIndex].value);
+                                      if (existing) deleteNote(existing.id);
+                                      updateLayer(selectedLayerIndex, "value", "");
+                                    }} className="text-xs text-destructive">Clear</button>
+                                  </div>
+                                </div>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>
-                      
-                      ))
+                      </div>
                     )}
                   </>
                 )}
