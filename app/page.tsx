@@ -45,6 +45,14 @@ function layerPathExample(_index: number) {
   return "Documents/github/repo/SKILL.md";
 }
 
+function kindPlaceholder(layers: LayerEntry[], index: number, kind: LayerEntry["kind"]) {
+  // count preceding layers of same kind to produce ordinal
+  const count = layers.slice(0, index).filter((l) => l.kind === kind).length + 1;
+  if (kind === "url") return `URL ${count}`;
+  if (kind === "path") return `Path ${count}`;
+  return `Note ${count}`;
+}
+
 function safeParseArray<T>(raw: string | null, mapper: (item: any) => T | null) {
   if (!raw) return null;
   try {
@@ -530,29 +538,14 @@ export default function Home() {
                       layers.map((layer, index) => (
                         <div key={index} className="space-y-3 rounded-xl border border-muted bg-background/90 px-4 pb-4 pt-2">
                           <div className="space-y-1">
-                            <div>
-                              <span className="text-xs font-medium text-muted-foreground">{layer.kind === 'url' ? 'URL' : layer.kind.charAt(0).toUpperCase() + layer.kind.slice(1)}</span>
-                            </div>
-
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-between gap-3">
                               <input
                                 aria-label={`Layer ${index + 1} title`}
-                                value={layer.label ?? layerName(index)}
+                                value={layer.label ?? ""}
                                 onChange={(e) => updateLayer(index, "label", e.target.value)}
-                                className="flex-none w-[220px] rounded-md border border-muted bg-background px-3 py-2 text-sm font-semibold text-foreground placeholder:text-muted-foreground"
+                                placeholder={kindPlaceholder(layers, index, layer.kind)}
+                                className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm font-semibold text-foreground placeholder:text-muted-foreground"
                               />
-
-                              {layer.kind === "note" ? (
-                                <div className="flex-1" />
-                              ) : (
-                                <input
-                                  type={layer.kind === "url" ? "url" : "text"}
-                                  value={layer.value}
-                                  onChange={(e) => updateLayer(index, "value", e.target.value)}
-                                  className="flex-1 rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                                  placeholder={layer.kind === "url" ? "https://example.com/page" : layerPathExample(index)}
-                                />
-                              )}
 
                               <button
                                 type="button"
@@ -564,6 +557,20 @@ export default function Home() {
                                 <FiTrash2 className="h-4 w-4" />
                                 <span className="hidden sm:inline">Remove</span>
                               </button>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              {layer.kind === "note" ? (
+                                <div className="flex-1" />
+                              ) : (
+                                <input
+                                  type={layer.kind === "url" ? "url" : "text"}
+                                  value={layer.value}
+                                  onChange={(e) => updateLayer(index, "value", e.target.value)}
+                                  className="flex-1 rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                                  placeholder={layer.kind === "url" ? "https://example.com/page" : layerPathExample(index)}
+                                />
+                              )}
                             </div>
                           </div>
 
