@@ -599,15 +599,17 @@ export default function Home() {
                                   <div>{layer.label ?? kindPlaceholder(layers, index, layer.kind)}</div>
                                 )}
                               </div>
-                              <div className="ml-2 relative">
-                                <button aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted"><FiMoreVertical /></button>
-                                {menuOpenIndex === index && (
-                                  <div className="absolute right-0 mt-2 w-36 rounded-md border bg-card p-1 z-10">
-                                    <button className="w-full text-left px-2 py-1 text-sm hover:bg-muted" onClick={() => startRenaming(index)}>Rename</button>
-                                    <button className="w-full text-left px-2 py-1 text-sm text-destructive hover:bg-muted" onClick={() => removeLayer(index)}>Remove</button>
-                                  </div>
-                                )}
-                              </div>
+                              {editingTitleIndex !== index && (
+                                <div className="ml-2 relative">
+                                  <button aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted"><FiMoreVertical /></button>
+                                  {menuOpenIndex === index && (
+                                    <div className="absolute right-0 mt-2 w-36 rounded-md border bg-card p-1 z-10">
+                                      <button className="w-full text-left px-2 py-1 text-sm hover:bg-muted" onClick={() => startRenaming(index)}>Rename</button>
+                                      <button className="w-full text-left px-2 py-1 text-sm text-destructive hover:bg-muted" onClick={() => removeLayer(index)}>Remove</button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
