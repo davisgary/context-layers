@@ -87,6 +87,7 @@ npm run dev
 
 ## Roadmap & Todos
 
+- [ ] Transition to a "second brain" — evolve from per-request layered context to a persisted personal knowledge graph (ingest, embeddings, retrieval, editor/graph) while preserving current layer semantics.
 - [ ] Production build with third-party OAuth for LLM integrations. Implement secure per-user OAuth flows so individual users can sign in with their own LLM provider account (do not rely on API keys in env for user access).
 - [ ] Integrate auth — implement user authentication and session management.
 - [ ] Integrate DB — add Postgres (Neon) for users, layers, sessions, and provider tokens.
