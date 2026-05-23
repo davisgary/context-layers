@@ -145,14 +145,18 @@ export async function POST(request: Request) {
         },
       });
     }
+    // Only load files from the `layers/` folder when the client explicitly provides
+    const layerArg = layerInputs ?? [];
+
     const [layerContexts, urlContexts] = await Promise.all([
-      loadLayerContext(layerInputs),
+      loadLayerContext(layerArg),
       loadUrlContext(urlInputs),
     ]);
 
     const noteContexts = (noteInputs || [])
       .filter((n) => typeof n.body === "string" && n.body.trim().length > 0)
       .map((n) => ({ name: n.label || n.title || "Note", content: (n.body || "").trim() }));
+
     const contexts = [...layerContexts, ...urlContexts, ...noteContexts];
     const prompt = buildLayeredPrompt(query, contexts);
     if (!wantsStream) {
