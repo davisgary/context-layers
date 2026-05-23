@@ -586,7 +586,17 @@ export default function Home() {
                         <div className="col-span-1 space-y-2">
                           {layers.map((layer, index) => (
                             <div key={index} onClick={() => setSelectedLayerIndex(index)} className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-accent bg-muted" : "border-transparent hover:border-muted"}`}>
-                              <div className="flex-1 text-sm font-medium">{layer.label ?? kindPlaceholder(layers, index, layer.kind)}</div>
+                              <div className="flex-1 text-sm font-medium">
+                                {editingTitleIndex === index ? (
+                                  <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                                    <input value={editingTitleValue} onChange={(e) => setEditingTitleValue(e.target.value)} className="flex-1 rounded-md border px-2 py-1 text-sm" />
+                                    <button className="px-2 text-sm" onClick={(e) => { e.stopPropagation(); saveRename(index); }}>Save</button>
+                                    <button className="px-2 text-sm text-muted" onClick={(e) => { e.stopPropagation(); cancelRename(); }}>Cancel</button>
+                                  </div>
+                                ) : (
+                                  <div>{layer.label ?? kindPlaceholder(layers, index, layer.kind)}</div>
+                                )}
+                              </div>
                               <div className="ml-2 relative">
                                 <button aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted"><FiMoreVertical /></button>
                                 {menuOpenIndex === index && (
@@ -606,25 +616,11 @@ export default function Home() {
                             <div className="space-y-3 rounded-xl border border-muted bg-background/90 px-4 pb-4 pt-2">
                               <div className="flex items-center justify-between">
                                 <div className="flex-1">
-                                  {editingTitleIndex === selectedLayerIndex ? (
-                                    <div className="flex gap-2">
-                                      <input value={editingTitleValue} onChange={(e) => setEditingTitleValue(e.target.value)} className="flex-1 rounded-md border px-2 py-1 text-sm" />
-                                      <button className="px-2 text-sm" onClick={() => saveRename(selectedLayerIndex)}>Save</button>
-                                      <button className="px-2 text-sm text-muted" onClick={cancelRename}>Cancel</button>
-                                    </div>
-                                  ) : (
-                                    <div className="text-sm font-semibold">{layers[selectedLayerIndex].label ?? kindPlaceholder(layers, selectedLayerIndex, layers[selectedLayerIndex].kind)}</div>
-                                  )}
+                                  <div className="text-sm font-semibold">{layers[selectedLayerIndex].label ?? kindPlaceholder(layers, selectedLayerIndex, layers[selectedLayerIndex].kind)}</div>
                                 </div>
 
                                 <div className="ml-2 relative">
-                                  <button aria-label="Layer menu" onClick={() => openMenuFor(selectedLayerIndex)} className="p-1 rounded hover:bg-muted"><FiMoreVertical /></button>
-                                  {menuOpenIndex === selectedLayerIndex && (
-                                    <div className="absolute right-0 mt-2 w-36 rounded-md border bg-card p-1 z-10">
-                                      <button className="w-full text-left px-2 py-1 text-sm hover:bg-muted" onClick={() => startRenaming(selectedLayerIndex)}>Rename</button>
-                                      <button className="w-full text-left px-2 py-1 text-sm text-destructive hover:bg-muted" onClick={() => removeLayer(selectedLayerIndex)}>Remove</button>
-                                    </div>
-                                  )}
+                                  {/* right-pane menu removed — editing available only from the left list */}
                                 </div>
                               </div>
 
