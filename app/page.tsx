@@ -588,10 +588,12 @@ export default function Home() {
                             <div key={index} onClick={() => setSelectedLayerIndex(index)} className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-accent bg-muted" : "border-transparent hover:border-muted"}`}>
                               <div className="flex-1 text-sm font-medium">
                                 {editingTitleIndex === index ? (
-                                  <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                                     <input value={editingTitleValue} onChange={(e) => setEditingTitleValue(e.target.value)} className="flex-1 rounded-md border px-2 py-1 text-sm text-primary-foreground" />
-                                    <button className="px-2 text-sm" onClick={(e) => { e.stopPropagation(); saveRename(index); }}>Save</button>
-                                    <button className="px-2 text-sm text-muted" onClick={(e) => { e.stopPropagation(); cancelRename(); }}>Cancel</button>
+                                    <div className="ml-1 flex flex-col items-start">
+                                      <button className="text-sm" onClick={(e) => { e.stopPropagation(); saveRename(index); }}>Save</button>
+                                      <button className="text-sm text-destructive mt-1" onClick={(e) => { e.stopPropagation(); cancelRename(); }}>Cancel</button>
+                                    </div>
                                   </div>
                                 ) : (
                                   <div>{layer.label ?? kindPlaceholder(layers, index, layer.kind)}</div>
