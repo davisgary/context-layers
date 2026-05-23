@@ -528,51 +528,51 @@ export default function Home() {
                     ) : (
                       layers.map((layer, index) => (
                         <div key={index} className="space-y-3 rounded-xl border border-muted bg-background/90 p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <input
-                              aria-label={`Layer ${index + 1} title`}
-                              value={layer.label ?? layerName(index)}
-                              onChange={(e) => updateLayer(index, "label", e.target.value)}
-                              className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm font-semibold text-foreground placeholder:text-muted-foreground"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeLayer(index)}
-                              title="Delete layer"
-                              aria-label="Delete layer"
-                              className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm text-destructive transition-colors duration-300 ease-in-out hover:bg-destructive/10"
-                            >
-                              <FiTrash2 className="h-4 w-4" />
-                              Remove
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr] sm:items-center">
-                            <div className="inline-flex items-center gap-2">
-                              <span className="rounded-md px-3 py-1.5 text-xs font-medium bg-background text-muted-foreground">{layer.kind.toUpperCase()}</span>
+                          <div className="space-y-2">
+                            <div>
+                              <span className="text-xs font-medium text-muted-foreground">{layer.kind.toUpperCase()}</span>
                             </div>
 
-                            {layer.kind === "note" ? (
-                              // Show note title (read-only) instead of exposing internal note id
+                            <div className="flex items-center gap-3">
                               <input
-                                type="text"
-                                readOnly
-                                value={(() => {
-                                  const note = notes.find((n) => n.id === layer.value);
-                                  return note ? note.title || note.body.slice(0, 60) : "Unsaved note";
-                                })()}
-                                className="w-full rounded-lg border border-muted bg-background/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                                placeholder="Unsaved note"
+                                aria-label={`Layer ${index + 1} title`}
+                                value={layer.label ?? layerName(index)}
+                                onChange={(e) => updateLayer(index, "label", e.target.value)}
+                                className="flex-none w-[220px] rounded-md border border-muted bg-background px-3 py-2 text-sm font-semibold text-foreground placeholder:text-muted-foreground"
                               />
-                            ) : (
-                              <input
-                                type={layer.kind === "url" ? "url" : "text"}
-                                value={layer.value}
-                                onChange={(e) => updateLayer(index, "value", e.target.value)}
-                                className="w-full rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                                placeholder={layer.kind === "url" ? "https://example.com/page" : layerPathExample(index)}
-                              />
-                            )}
+
+                              {layer.kind === "note" ? (
+                                <input
+                                  type="text"
+                                  readOnly
+                                  value={(() => {
+                                    const note = notes.find((n) => n.id === layer.value);
+                                    return note ? note.title || note.body.slice(0, 60) : "Unsaved note";
+                                  })()}
+                                  className="flex-1 rounded-lg border border-muted bg-background/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                                  placeholder="Unsaved note"
+                                />
+                              ) : (
+                                <input
+                                  type={layer.kind === "url" ? "url" : "text"}
+                                  value={layer.value}
+                                  onChange={(e) => updateLayer(index, "value", e.target.value)}
+                                  className="flex-1 rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                                  placeholder={layer.kind === "url" ? "https://example.com/page" : layerPathExample(index)}
+                                />
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => removeLayer(index)}
+                                title="Delete layer"
+                                aria-label="Delete layer"
+                                className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm text-destructive transition-colors duration-300 ease-in-out hover:bg-destructive/10"
+                              >
+                                <FiTrash2 className="h-4 w-4" />
+                                <span className="hidden sm:inline">Remove</span>
+                              </button>
+                            </div>
                           </div>
 
                           {layer.kind === "note" ? (
