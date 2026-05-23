@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { FiArrowUp, FiPlus, FiChevronDown, FiLoader, FiTrash2 } from "react-icons/fi";
+import { FiArrowUp, FiPlus, FiChevronDown, FiLoader, FiTrash2, FiMoreVertical } from "react-icons/fi";
 import Footer from "../components/Footer";
 
 type LayerEntry = { kind: "path" | "url" | "note"; value: string; label?: string };
@@ -168,6 +168,32 @@ export default function Home() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
+
+  // menu & rename state
+  const [menuOpenIndex, setMenuOpenIndex] = useState<number | null>(null);
+  const [editingTitleIndex, setEditingTitleIndex] = useState<number | null>(null);
+  const [editingTitleValue, setEditingTitleValue] = useState("");
+
+  function openMenuFor(index: number) {
+    setMenuOpenIndex((p) => (p === index ? null : index));
+  }
+
+  function startRenaming(index: number) {
+    setEditingTitleIndex(index);
+    setEditingTitleValue(layers[index]?.label ?? kindPlaceholder(layers, index, layers[index].kind));
+    setMenuOpenIndex(null);
+  }
+
+  function saveRename(index: number) {
+    updateLayer(index, "label", editingTitleValue || "");
+    setEditingTitleIndex(null);
+    setEditingTitleValue("");
+  }
+
+  function cancelRename() {
+    setEditingTitleIndex(null);
+    setEditingTitleValue("");
+  }
 
   // Load saved entries on mount (client-only) to avoid SSR/CSR mismatch.
   useEffect(() => {
@@ -538,25 +564,44 @@ export default function Home() {
                       layers.map((layer, index) => (
                         <div key={index} className="space-y-3 rounded-xl border border-muted bg-background/90 px-4 pb-4 pt-2">
                           <div className="space-y-1">
-                            <div className="flex items-center justify-between gap-3">
-                              <input
-                                aria-label={`Layer ${index + 1} title`}
-                                value={layer.label ?? ""}
-                                onChange={(e) => updateLayer(index, "label", e.target.value)}
-                                placeholder={kindPlaceholder(layers, index, layer.kind)}
-                                className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm font-semibold text-foreground placeholder:text-muted-foreground"
-                              />
+                            <div className="flex items-start gap-3">
+                              {/* Left column: title + menu */}
+                              <div className="w-48 flex-shrink-0">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex-1">
+                                    {editingTitleIndex === index ? (
+                                      <div className="flex gap-2">
+                                        <input
+                                          value={editingTitleValue}
+                                          onChange={(e) => setEditingTitleValue(e.target.value)}
+                                          className="flex-1 rounded-md border px-2 py-1 text-sm"
+                                        />
+                                        <button className="px-2 text-sm" onClick={() => saveRename(index)}>Save</button>
+                                        <button className="px-2 text-sm text-muted" onClick={cancelRename}>Cancel</button>
+                                      </div>
+                                    ) : (
+                                      <div className="text-sm font-semibold">{layer.label ?? kindPlaceholder(layers, index, layer.kind)}</div>
+                                    )}
+                                  </div>
 
-                              <button
-                                type="button"
-                                onClick={() => removeLayer(index)}
-                                title="Delete layer"
-                                aria-label="Delete layer"
-                                className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm text-destructive transition-colors duration-300 ease-in-out hover:bg-destructive/10"
-                              >
-                                <FiTrash2 className="h-4 w-4" />
-                                <span className="hidden sm:inline">Remove</span>
-                              </button>
+                                  <div className="ml-2 relative">
+                                    <button aria-label="Layer menu" onClick={() => openMenuFor(index)} className="p-1 rounded hover:bg-muted">
+                                      <FiMoreVertical />
+                                    </button>
+                                    {menuOpenIndex === index && (
+                                      <div className="absolute right-0 mt-2 w-36 rounded-md border bg-card p-1 z-10">
+                                        <button className="w-full text-left px-2 py-1 text-sm hover:bg-muted" onClick={() => startRenaming(index)}>Rename</button>
+                                        <button className="w-full text-left px-2 py-1 text-sm text-destructive hover:bg-muted" onClick={() => removeLayer(index)}>Remove</button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right column: value / note editor */}
+                              <div className="flex-1">
+                                {/* the existing value input/note editor markup below will handle content */}
+                              </div>
                             </div>
 
                             <div className="flex items-center gap-3">
