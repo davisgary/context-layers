@@ -527,10 +527,10 @@ export default function Home() {
                       </div>
                     ) : (
                       layers.map((layer, index) => (
-                        <div key={index} className="space-y-3 rounded-xl border border-muted bg-background/90 p-4">
-                          <div className="space-y-2">
+                        <div key={index} className="space-y-3 rounded-xl border border-muted bg-background/90 px-4 pb-4 pt-2">
+                          <div className="space-y-1">
                             <div>
-                              <span className="text-xs font-medium text-muted-foreground">{layer.kind.toUpperCase()}</span>
+                              <span className="text-xs font-medium text-muted-foreground">{layer.kind === 'url' ? 'URL' : layer.kind.charAt(0).toUpperCase() + layer.kind.slice(1)}</span>
                             </div>
 
                             <div className="flex items-center gap-3">
