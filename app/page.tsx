@@ -6,11 +6,14 @@ import remarkGfm from "remark-gfm";
 import { FiArrowUp, FiPlus, FiChevronDown, FiLoader, FiTrash2 } from "react-icons/fi";
 import Footer from "../components/Footer";
 
-type LayerEntry = { kind: "path" | "url"; value: string };
+type LayerEntry = { kind: "path" | "url" | "note"; value: string };
+
+type Note = { id: string; title: string; body: string; createdAt: number };
 
 const LAYER_STORAGE_KEY = "layers:user-inputs"; // legacy
 const URL_STORAGE_KEY = "layers:url-inputs"; // legacy
 const LAYER_ENTRY_STORAGE_KEY = "layers:entries";
+const NOTES_STORAGE_KEY = "layers:notes";
 
 type ChatSource = "openai" | "claude" | "ollama";
 type SourceModelState = { openai: string; claude: string; ollama: string };
@@ -76,11 +79,64 @@ function sanitizeStoredUrls(raw: string | null) {
 
 function sanitizeStoredEntries(raw: string | null): LayerEntry[] | null {
   return safeParseArray(raw, (record: any) => {
-    const kind = record.kind === "url" ? "url" : "path";
+    const kind = record.kind === "url" ? "url" : record.kind === "note" ? "note" : "path";
     const value = typeof record.value === "string" ? record.value.trim() : "";
     if (!value) return null;
     return { kind: kind as LayerEntry["kind"], value };
   });
+}
+
+function sanitizeStoredNotes(raw: string | null): Note[] | null {
+  return safeParseArray(raw, (record: any) => {
+    const id = typeof record.id === "string" ? record.id : null;
+    const title = typeof record.title === "string" ? record.title : "";
+    const body = typeof record.body === "string" ? record.body : "";
+    const createdAt = typeof record.createdAt === "number" ? record.createdAt : Date.now();
+    if (!id) return null;
+    return { id, title, body, createdAt } as Note;
+  });
+}
+
+function NoteInlineEditor({
+  layerValue,
+  notes,
+  onSave,
+  onDelete,
+}: {
+  layerValue: string;
+  notes: Note[];
+  onSave: (note: Note) => void;
+  onDelete: () => void;
+}) {
+  const existing = notes.find((n) => n.id === layerValue);
+  const [title, setTitle] = useState(existing ? existing.title : "");
+  const [body, setBody] = useState(existing ? existing.body : layerValue || "");
+
+  useEffect(() => {
+    if (existing) {
+      setTitle(existing.title);
+      setBody(existing.body);
+    }
+  }, [layerValue]);
+
+  function save() {
+    const id = existing ? existing.id : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const note: Note = { id, title: title || "Untitled", body, createdAt: existing ? existing.createdAt : Date.now() };
+    onSave(note);
+  }
+
+  return (
+    <div className="space-y-2">
+      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm" />
+      <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Note body..." className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm min-h-[80px]" />
+      <div className="flex items-center justify-end gap-2">
+        <button type="button" onClick={save} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-1 text-xs font-medium hover:bg-muted">
+          Save
+        </button>
+        <button type="button" onClick={onDelete} className="text-xs text-destructive">Clear</button>
+      </div>
+    </div>
+  );
 }
 
 export default function Home() {
@@ -98,6 +154,7 @@ export default function Home() {
   const [dynamicModels, setDynamicModels] = useState<{ openai?: string[]; claude?: string[]; ollama?: string[] }>({});
 
   const [layers, setLayers] = useState<LayerEntry[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -107,6 +164,9 @@ export default function Home() {
   useEffect(() => {
     setMounted(true);
     try {
+      const storedNotes = sanitizeStoredNotes(localStorage.getItem(NOTES_STORAGE_KEY));
+      if (storedNotes) setNotes(storedNotes);
+
       const entries = sanitizeStoredEntries(localStorage.getItem(LAYER_ENTRY_STORAGE_KEY));
       if (entries) {
         setLayers(entries);
@@ -146,8 +206,29 @@ export default function Home() {
     }
   }, [layers, mounted]);
 
-  function addLayer() {
+  // Persist notes
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      if (notes.length > 0) localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+      else localStorage.removeItem(NOTES_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  }, [notes, mounted]);
+
+  // removed addLayer (use addPathLayer/addUrlLayer/addNoteLayer instead)
+
+  function addPathLayer() {
     setLayers((prev) => [...prev, { kind: "path", value: "" }]);
+  }
+
+  function addUrlLayer() {
+    setLayers((prev) => [...prev, { kind: "url", value: "" }]);
+  }
+
+  function addNoteLayer() {
+    setLayers((prev) => [...prev, { kind: "note", value: "" }]);
   }
 
   function removeLayer(index: number) {
@@ -155,7 +236,60 @@ export default function Home() {
   }
 
   function updateLayer(index: number, field: keyof LayerEntry, value: string) {
-    setLayers((prev) => prev.map((layer, i) => (i === index ? { ...layer, [field]: value } : layer)));
+    setLayers((prev) => {
+      return prev.map((layer, i) => {
+        if (i !== index) return layer;
+
+        // protect saved notes: if this layer currently references a saved note id
+        // and the user is trying to change its kind away from 'note', block it.
+        if (field === "kind" && layer.kind === "note" && value !== "note") {
+          const noteExists = notes.some((n) => n.id === layer.value);
+          if (noteExists) {
+            try {
+              // Use confirm so the user can intentionally override; default is to block.
+              const ok = window.confirm(
+                "This layer references a saved note. Changing the kind will detach it. Proceed?"
+              );
+              if (!ok) return layer;
+            } catch {
+              return layer;
+            }
+          }
+        }
+
+        return { ...layer, [field]: value } as LayerEntry;
+      });
+    });
+  }
+
+  // Notes helpers
+  function createNote(title: string, body: string) {
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const note: Note = { id, title: title || "Untitled", body, createdAt: Date.now() };
+    setNotes((prev) => [note, ...prev]);
+    return note;
+  }
+
+  function deleteNote(id: string) {
+    setNotes((prev) => prev.filter((n) => n.id !== id));
+    // remove any layer references to this note
+    setLayers((prev) => prev.filter((l) => !(l.kind === "note" && l.value === id)));
+  }
+
+  function addNoteAsLayer(id: string) {
+    // only add if not already present
+    setLayers((prev) => {
+      if (prev.some((p) => p.kind === "note" && p.value === id)) return prev;
+      return [...prev, { kind: "note", value: id }];
+    });
+  }
+
+  function attachNoteToQuery(id: string) {
+    const note = notes.find((n) => n.id === id);
+    if (!note) return;
+    setQuery((prev) => (prev ? `${prev}\n\n${note.body}` : note.body));
+    // resize textarea
+    setTimeout(() => handleQueryChange((queryRef.current?.value ?? "") as string), 0);
   }
 
   function currentModelOptions(): string[] {
@@ -242,6 +376,25 @@ export default function Home() {
       })
       .filter((u): u is { url: string; label: string } => !!u);
 
+    // include notes payload: expand note layer references to their content
+    let noteCount = 0;
+    const payloadNotes = layers
+      .filter((layer) => layer.kind === "note")
+      .map((layer, i) => {
+        const value = layer.value.trim();
+        if (!value) return null;
+        // try to find a saved note by id
+        const found = notes.find((n) => n.id === value);
+        if (found) {
+          noteCount += 1;
+          return { id: found.id, title: found.title, body: found.body, label: found.title || `Note ${noteCount}` };
+        }
+        // fallback: if layer contains unsaved body, send as temporary note
+        noteCount += 1;
+        return { id: `unsaved-${i}-${Date.now()}`, title: "Unsaved note", body: value, label: `Note ${noteCount}` };
+      })
+      .filter((n) => n !== null) as { id: string; title: string; body: string; label?: string }[];
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -252,6 +405,7 @@ export default function Home() {
           model: currentModel(),
           layers: payloadLayers.length > 0 ? payloadLayers : undefined,
           urls: payloadUrls.length > 0 ? payloadUrls : undefined,
+          notes: payloadNotes.length > 0 ? payloadNotes : undefined,
           stream: true,
         }),
       });
@@ -344,14 +498,18 @@ export default function Home() {
                   <h2 className="text-sm font-semibold tracking-wide">Layers</h2>
                   <p className="mt-1 text-xs text-muted-foreground">Attach local file paths or scrape URLs as context.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={addLayer}
-                  className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium transition-colors duration-300 ease-in-out hover:bg-muted"
-                >
-                  <FiPlus className="h-4 w-4" />
-                  Add item
-                </button>
+                <div className="inline-flex items-center gap-2">
+                  <button type="button" onClick={addPathLayer} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium hover:bg-muted">
+                    <FiPlus className="h-4 w-4" />
+                    Add path
+                  </button>
+                  <button type="button" onClick={addUrlLayer} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium hover:bg-muted">
+                    Add URL
+                  </button>
+                  <button type="button" onClick={addNoteLayer} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium hover:bg-muted">
+                    Add note
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-3" suppressHydrationWarning>
@@ -381,32 +539,57 @@ export default function Home() {
                           </div>
 
                           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr] sm:items-center">
-                            <div className="inline-flex rounded-lg border border-muted bg-muted/40 p-1">
-                              <button
-                                type="button"
-                                onClick={() => updateLayer(index, "kind", "path")}
-                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${layer.kind === "path" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                              >
-                                Path
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => updateLayer(index, "kind", "url")}
-                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${layer.kind === "url" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                              >
-                                URL
-                              </button>
+                            <div className="inline-flex items-center gap-2">
+                              <span className="rounded-md px-3 py-1.5 text-xs font-medium bg-background text-muted-foreground">{layer.kind.toUpperCase()}</span>
                             </div>
 
-                            <input
-                              type={layer.kind === "url" ? "url" : "text"}
-                              value={layer.value}
-                              onChange={(e) => updateLayer(index, "value", e.target.value)}
-                              className="w-full rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                              placeholder={layer.kind === "url" ? "https://example.com/page" : layerPathExample(index)}
-                            />
+                            {layer.kind === "note" ? (
+                              // Show note title (read-only) instead of exposing internal note id
+                              <input
+                                type="text"
+                                readOnly
+                                value={(() => {
+                                  const note = notes.find((n) => n.id === layer.value);
+                                  return note ? note.title || note.body.slice(0, 60) : "Unsaved note";
+                                })()}
+                                className="w-full rounded-lg border border-muted bg-background/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                                placeholder="Unsaved note"
+                              />
+                            ) : (
+                              <input
+                                type={layer.kind === "url" ? "url" : "text"}
+                                value={layer.value}
+                                onChange={(e) => updateLayer(index, "value", e.target.value)}
+                                className="w-full rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                                placeholder={layer.kind === "url" ? "https://example.com/page" : layerPathExample(index)}
+                              />
+                            )}
                           </div>
+
+                          {layer.kind === "note" ? (
+                            <div className="mt-3 space-y-2">
+                              {/* Inline note editor: title + body. layer.value stores note id or temporary body if not saved */}
+                              <NoteInlineEditor
+                                layerValue={layer.value}
+                                notes={notes}
+                                onSave={(note) => {
+                                  // ensure note is in notes list and layer references the id
+                                  setNotes((prev) => {
+                                    const exists = prev.find((n) => n.id === note.id);
+                                    if (exists) return prev.map((n) => (n.id === note.id ? note : n));
+                                    return [note, ...prev];
+                                  });
+                                  updateLayer(index, "value", note.id);
+                                }}
+                                onDelete={() => {
+                                  // clear layer value
+                                  updateLayer(index, "value", "");
+                                }}
+                              />
+                            </div>
+                          ) : null}
                         </div>
+                      
                       ))
                     )}
                   </>

@@ -23,7 +23,8 @@ function buildResponseCacheKey(
   model: string,
   query: string,
   layers?: LayerPathInput[],
-  urls?: UrlContextInput[]
+  urls?: UrlContextInput[],
+  notes?: Array<{ id: string; title?: string; body?: string; label?: string }>
 ): string {
   const layerKey = layers?.map((layer) => ({
     path: layer.path,
@@ -33,12 +34,28 @@ function buildResponseCacheKey(
     url: url.url,
     label: url.label,
   }));
+  const noteKey = notes?.map((n) => ({ id: n.id, title: n.title, body: n.body, label: n.label }));
   return JSON.stringify({
     source,
     model,
     query,
     layers: layerKey || [],
     urls: urlKey || [],
+    notes: noteKey || [],
+  });
+}
+
+function parseNoteInputs(input: unknown): Array<{ id: string; title?: string; body?: string; label?: string }> | undefined {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input)) throw new Error("`notes` must be an array when provided.");
+  return input.map((item, index) => {
+    if (!item || typeof item !== "object") throw new Error(`notes[${index}] must be an object.`);
+    const rec = item as Record<string, unknown>;
+    const id = typeof rec.id === "string" ? rec.id : `note-${index}`;
+    const title = typeof rec.title === "string" ? rec.title : undefined;
+    const body = typeof rec.body === "string" ? rec.body : undefined;
+    const label = typeof rec.label === "string" ? rec.label : undefined;
+    return { id, title, body, label };
   });
 }
 
@@ -72,6 +89,7 @@ export async function POST(request: Request) {
       query?: unknown;
       layers?: unknown;
       urls?: unknown;
+      notes?: unknown;
       source?: unknown;
       model?: unknown;
       stream?: unknown;
@@ -90,8 +108,9 @@ export async function POST(request: Request) {
 
     const source = parseSource(body.source);
     const model = parseRequiredModel(body.model);
-    const layerInputs = parseLayerInputs(body.layers);
-    const urlInputs = parseUrlInputs(body.urls);
+  const layerInputs = parseLayerInputs(body.layers);
+  const urlInputs = parseUrlInputs(body.urls);
+  const noteInputs = parseNoteInputs(body.notes);
     const acceptHeader = request.headers.get("accept") || "";
     const wantsStream =
       body.stream !== false &&
@@ -102,7 +121,8 @@ export async function POST(request: Request) {
       model,
       query,
       layerInputs,
-      urlInputs
+      urlInputs,
+      noteInputs
     );
     const cachedAnswer = getCachedAnswer(cacheKey);
     if (cachedAnswer) {
@@ -129,7 +149,11 @@ export async function POST(request: Request) {
       loadLayerContext(layerInputs),
       loadUrlContext(urlInputs),
     ]);
-    const contexts = [...layerContexts, ...urlContexts];
+
+    const noteContexts = (noteInputs || [])
+      .filter((n) => typeof n.body === "string" && n.body.trim().length > 0)
+      .map((n) => ({ name: n.label || n.title || "Note", content: (n.body || "").trim() }));
+    const contexts = [...layerContexts, ...urlContexts, ...noteContexts];
     const prompt = buildLayeredPrompt(query, contexts);
     if (!wantsStream) {
       const answer = await generateAnswer(source, prompt, model);
