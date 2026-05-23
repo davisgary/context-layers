@@ -458,12 +458,12 @@ export default function Home() {
                   title="Submit"
                   aria-label="Submit"
                   aria-busy={isLoading}
-                  className={`mb-1 absolute bottom-2 right-2 inline-flex h-10 w-10 items-center justify-center rounded-lg shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition transform duration-200 ease-out bg-primary text-primary-foreground${query.trim().length > 0 ? " hover:bg-primary/70 hover:-translate-y-0.5 hover:scale-105 hover:shadow-xl active:scale-95 cursor-pointer" : " cursor-default"}`}
+                  className={`mb-1 absolute bottom-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-lg shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition transform duration-200 ease-out bg-primary text-primary-foreground${query.trim().length > 0 ? " hover:bg-accent-foreground hover:-translate-y-0.5 hover:scale-105 hover:shadow-xl active:scale-95 cursor-pointer" : " cursor-default"}`}
                 >
                   {isLoading ? (
-                    <FiLoader className="h-[21px] w-[21px] animate-spin" aria-hidden="true" />
+                    <FiLoader className="h-[20px] w-[20px] animate-spin" aria-hidden="true" />
                   ) : (
-                    <FiArrowUp className="h-[21px] w-[21px]" />
+                    <FiArrowUp className="h-[20px] w-[20px]" />
                   )}
                 </button>
               </div>
