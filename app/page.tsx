@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 import { FiArrowUp, FiPlus, FiChevronDown, FiLoader, FiTrash2 } from "react-icons/fi";
 import Footer from "../components/Footer";
 
-type LayerEntry = { kind: "path" | "url" | "note"; value: string };
+type LayerEntry = { kind: "path" | "url" | "note"; value: string; label?: string };
 
 type Note = { id: string; title: string; body: string; createdAt: number };
 
@@ -82,7 +82,8 @@ function sanitizeStoredEntries(raw: string | null): LayerEntry[] | null {
     const kind = record.kind === "url" ? "url" : record.kind === "note" ? "note" : "path";
     const value = typeof record.value === "string" ? record.value.trim() : "";
     if (!value) return null;
-    return { kind: kind as LayerEntry["kind"], value };
+    const label = typeof record.label === "string" ? record.label.trim() : undefined;
+    return { kind: kind as LayerEntry["kind"], value, label };
   });
 }
 
@@ -176,18 +177,18 @@ export default function Home() {
       // fallback to legacy keys (paths then urls)
       const paths = sanitizeStoredLayers(localStorage.getItem(LAYER_STORAGE_KEY)) || [];
       const urls = sanitizeStoredUrls(localStorage.getItem(URL_STORAGE_KEY)) || [];
-      const merged: LayerEntry[] = [];
-      merged.push(...paths.map((p) => ({ kind: "path" as const, value: p.path })));
-      merged.push(...urls.map((u) => ({ kind: "url" as const, value: u.url })));
+  const merged: LayerEntry[] = [];
+  merged.push(...paths.map((p, i) => ({ kind: "path" as const, value: p.path, label: p.label ?? layerName(i) })));
+  merged.push(...urls.map((u, i) => ({ kind: "url" as const, value: u.url, label: u.label ?? undefined })));
       if (merged.length > 0) {
         setLayers(merged);
         return;
       }
 
       // seed a single empty path entry when there are no saved entries
-      setLayers([{ kind: "path", value: "" }]);
+      setLayers([{ kind: "path", value: "", label: layerName(0) }]);
     } catch {
-      setLayers([{ kind: "path", value: "" }]);
+      setLayers([{ kind: "path", value: "", label: layerName(0) }]);
     }
   }, []);
 
@@ -220,15 +221,15 @@ export default function Home() {
   // removed addLayer (use addPathLayer/addUrlLayer/addNoteLayer instead)
 
   function addPathLayer() {
-    setLayers((prev) => [...prev, { kind: "path", value: "" }]);
+    setLayers((prev) => [...prev, { kind: "path", value: "", label: layerName(prev.filter(l=>l.kind==='path').length) }]);
   }
 
   function addUrlLayer() {
-    setLayers((prev) => [...prev, { kind: "url", value: "" }]);
+    setLayers((prev) => [...prev, { kind: "url", value: "", label: undefined }]);
   }
 
   function addNoteLayer() {
-    setLayers((prev) => [...prev, { kind: "note", value: "" }]);
+    setLayers((prev) => [...prev, { kind: "note", value: "", label: undefined }]);
   }
 
   function removeLayer(index: number) {
@@ -360,7 +361,7 @@ export default function Home() {
       .map((layer) => {
         const value = layer.value.trim();
         if (!value) return null;
-        const label = layerName(pathCount);
+        const label = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : layerName(pathCount);
         pathCount += 1;
         return { path: value, label };
       })
@@ -372,7 +373,8 @@ export default function Home() {
         const value = layer.value.trim();
         if (!value) return null;
         urlCount += 1;
-        return { url: value, label: `URL ${urlCount}` };
+        const label = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : `URL ${urlCount}`;
+        return { url: value, label };
       })
       .filter((u): u is { url: string; label: string } => !!u);
 
@@ -387,11 +389,13 @@ export default function Home() {
         const found = notes.find((n) => n.id === value);
         if (found) {
           noteCount += 1;
-          return { id: found.id, title: found.title, body: found.body, label: found.title || `Note ${noteCount}` };
+          const label = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : (found.title || `Note ${noteCount}`);
+          return { id: found.id, title: found.title, body: found.body, label };
         }
         // fallback: if layer contains unsaved body, send as temporary note
-        noteCount += 1;
-        return { id: `unsaved-${i}-${Date.now()}`, title: "Unsaved note", body: value, label: `Note ${noteCount}` };
+  noteCount += 1;
+  const label = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : `Note ${noteCount}`;
+  return { id: `unsaved-${i}-${Date.now()}`, title: "Unsaved note", body: value, label };
       })
       .filter((n) => n !== null) as { id: string; title: string; body: string; label?: string }[];
 
@@ -525,7 +529,12 @@ export default function Home() {
                       layers.map((layer, index) => (
                         <div key={index} className="space-y-3 rounded-xl border border-muted bg-background/90 p-4">
                           <div className="flex items-center justify-between gap-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{layerName(index)}</div>
+                            <input
+                              aria-label={`Layer ${index + 1} title`}
+                              value={layer.label ?? layerName(index)}
+                              onChange={(e) => updateLayer(index, "label", e.target.value)}
+                              className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm font-semibold text-foreground placeholder:text-muted-foreground"
+                            />
                             <button
                               type="button"
                               onClick={() => removeLayer(index)}
