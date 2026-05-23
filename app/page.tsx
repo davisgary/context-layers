@@ -3,14 +3,17 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { FiArrowUp, FiPlus, FiChevronDown, FiLoader, FiTrash2 } from "react-icons/fi";
+import { FiArrowUp, FiPlus, FiChevronDown, FiLoader, FiTrash2, FiMoreVertical } from "react-icons/fi";
 import Footer from "../components/Footer";
 
-type LayerEntry = { kind: "path" | "url"; value: string };
+type LayerEntry = { kind: "path" | "url" | "note"; value: string; label?: string };
+
+type Note = { id: string; title: string; body: string; createdAt: number };
 
 const LAYER_STORAGE_KEY = "layers:user-inputs"; // legacy
 const URL_STORAGE_KEY = "layers:url-inputs"; // legacy
 const LAYER_ENTRY_STORAGE_KEY = "layers:entries";
+const NOTES_STORAGE_KEY = "layers:notes";
 
 type ChatSource = "openai" | "claude" | "ollama";
 type SourceModelState = { openai: string; claude: string; ollama: string };
@@ -40,6 +43,14 @@ function layerName(index: number) {
 
 function layerPathExample(_index: number) {
   return "Documents/github/repo/SKILL.md";
+}
+
+function kindPlaceholder(layers: LayerEntry[], index: number, kind: LayerEntry["kind"]) {
+  // count preceding layers of same kind to produce ordinal
+  const count = layers.slice(0, index).filter((l) => l.kind === kind).length + 1;
+  if (kind === "url") return `URL ${count}`;
+  if (kind === "path") return `Path ${count}`;
+  return `Note ${count}`;
 }
 
 function safeParseArray<T>(raw: string | null, mapper: (item: any) => T | null) {
@@ -76,11 +87,63 @@ function sanitizeStoredUrls(raw: string | null) {
 
 function sanitizeStoredEntries(raw: string | null): LayerEntry[] | null {
   return safeParseArray(raw, (record: any) => {
-    const kind = record.kind === "url" ? "url" : "path";
+    const kind = record.kind === "url" ? "url" : record.kind === "note" ? "note" : "path";
     const value = typeof record.value === "string" ? record.value.trim() : "";
     if (!value) return null;
-    return { kind: kind as LayerEntry["kind"], value };
+    const label = typeof record.label === "string" ? record.label.trim() : undefined;
+    return { kind: kind as LayerEntry["kind"], value, label };
   });
+}
+
+function sanitizeStoredNotes(raw: string | null): Note[] | null {
+  return safeParseArray(raw, (record: any) => {
+    const id = typeof record.id === "string" ? record.id : null;
+    const title = typeof record.title === "string" ? record.title : "";
+    const body = typeof record.body === "string" ? record.body : "";
+    const createdAt = typeof record.createdAt === "number" ? record.createdAt : Date.now();
+    if (!id) return null;
+    return { id, title, body, createdAt } as Note;
+  });
+}
+
+function NoteInlineEditor({
+  layerValue,
+  notes,
+  onSave,
+  onDelete,
+}: {
+  layerValue: string;
+  notes: Note[];
+  onSave: (note: Note) => void;
+  onDelete: () => void;
+}) {
+  const existing = notes.find((n) => n.id === layerValue);
+  const [title, setTitle] = useState(existing ? existing.title : "");
+  const [body, setBody] = useState(existing ? existing.body : layerValue || "");
+
+  useEffect(() => {
+    if (existing) {
+      setTitle(existing.title);
+      setBody(existing.body);
+    }
+  }, [layerValue]);
+
+  function save() {
+    const id = existing ? existing.id : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const note: Note = { id, title: title || "Untitled", body, createdAt: existing ? existing.createdAt : Date.now() };
+    onSave(note);
+  }
+
+  return (
+    <div className="space-y-2">
+      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm" />
+      <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Note body..." className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm min-h-[80px]" />
+      <div className="flex items-center justify-end gap-2">
+        <button type="button" onClick={save} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-1 text-xs font-medium hover:bg-muted">Save</button>
+        <button type="button" onClick={onDelete} className="text-xs text-destructive">Clear</button>
+      </div>
+    </div>
+  );
 }
 
 export default function Home() {
@@ -98,15 +161,62 @@ export default function Home() {
   const [dynamicModels, setDynamicModels] = useState<{ openai?: string[]; claude?: string[]; ollama?: string[] }>({});
 
   const [layers, setLayers] = useState<LayerEntry[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
 
+  // menu & rename state
+  const [menuOpenIndex, setMenuOpenIndex] = useState<number | null>(null);
+  const [editingTitleIndex, setEditingTitleIndex] = useState<number | null>(null);
+  const [editingTitleValue, setEditingTitleValue] = useState("");
+  // selected layer shown in the right panel
+  const [selectedLayerIndex, setSelectedLayerIndex] = useState<number>(0);
+
+  function openMenuFor(index: number) {
+    setMenuOpenIndex((p) => (p === index ? null : index));
+  }
+
+  function startRenaming(index: number) {
+    setEditingTitleIndex(index);
+    setEditingTitleValue(layers[index]?.label ?? kindPlaceholder(layers, index, layers[index].kind));
+    setMenuOpenIndex(null);
+  }
+
+  function saveRename(index: number) {
+    updateLayer(index, "label", editingTitleValue || "");
+    setEditingTitleIndex(null);
+    setEditingTitleValue("");
+  }
+
+  function cancelRename() {
+    setEditingTitleIndex(null);
+    setEditingTitleValue("");
+  }
+
+  // Close the layer menu when clicking outside of it
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent) {
+      if (menuOpenIndex === null) return;
+      const target = e.target as Element | null;
+      if (!target) return;
+      // if the click is inside the menu or the menu button, do nothing
+      if (target.closest('.layer-menu') || target.closest('.layer-menu-button')) return;
+      setMenuOpenIndex(null);
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [menuOpenIndex]);
+
   // Load saved entries on mount (client-only) to avoid SSR/CSR mismatch.
   useEffect(() => {
     setMounted(true);
     try {
+      const storedNotes = sanitizeStoredNotes(localStorage.getItem(NOTES_STORAGE_KEY));
+      if (storedNotes) setNotes(storedNotes);
+
       const entries = sanitizeStoredEntries(localStorage.getItem(LAYER_ENTRY_STORAGE_KEY));
       if (entries) {
         setLayers(entries);
@@ -117,17 +227,17 @@ export default function Home() {
       const paths = sanitizeStoredLayers(localStorage.getItem(LAYER_STORAGE_KEY)) || [];
       const urls = sanitizeStoredUrls(localStorage.getItem(URL_STORAGE_KEY)) || [];
       const merged: LayerEntry[] = [];
-      merged.push(...paths.map((p) => ({ kind: "path" as const, value: p.path })));
-      merged.push(...urls.map((u) => ({ kind: "url" as const, value: u.url })));
+      merged.push(...paths.map((p, i) => ({ kind: "path" as const, value: p.path, label: p.label ?? layerName(i) })));
+      merged.push(...urls.map((u, i) => ({ kind: "url" as const, value: u.url, label: u.label ?? undefined })));
       if (merged.length > 0) {
         setLayers(merged);
         return;
       }
 
       // seed a single empty path entry when there are no saved entries
-      setLayers([{ kind: "path", value: "" }]);
+      setLayers([{ kind: "path", value: "", label: layerName(0) }]);
     } catch {
-      setLayers([{ kind: "path", value: "" }]);
+      setLayers([{ kind: "path", value: "", label: layerName(0) }]);
     }
   }, []);
 
@@ -146,16 +256,112 @@ export default function Home() {
     }
   }, [layers, mounted]);
 
-  function addLayer() {
-    setLayers((prev) => [...prev, { kind: "path", value: "" }]);
+  // Persist notes
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      if (notes.length > 0) localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(notes));
+      else localStorage.removeItem(NOTES_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  }, [notes, mounted]);
+
+  // add/remove helpers now manage selection for single-pane view
+  function addPathLayer() {
+    setLayers((prev) => {
+      const next = [...prev, ({ kind: "path", value: "", label: layerName(prev.filter((l) => l.kind === "path").length) } as LayerEntry)];
+      setSelectedLayerIndex(next.length - 1);
+      return next;
+    });
+  }
+
+  function addUrlLayer() {
+    setLayers((prev) => {
+      const next = [...prev, ({ kind: "url", value: "", label: undefined } as LayerEntry)];
+      setSelectedLayerIndex(next.length - 1);
+      return next;
+    });
+  }
+
+  function addNoteLayer() {
+    setLayers((prev) => {
+      const next = [...prev, ({ kind: "note", value: "", label: undefined } as LayerEntry)];
+      setSelectedLayerIndex(next.length - 1);
+      return next;
+    });
   }
 
   function removeLayer(index: number) {
-    setLayers((prev) => prev.filter((_, i) => i !== index));
+    setLayers((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      // adjust selected index
+      if (next.length === 0) {
+        setSelectedLayerIndex(0);
+      } else if (selectedLayerIndex >= next.length) {
+        setSelectedLayerIndex(next.length - 1);
+      } else if (index === selectedLayerIndex) {
+        setSelectedLayerIndex(Math.max(0, selectedLayerIndex - 1));
+      }
+      return next;
+    });
   }
 
   function updateLayer(index: number, field: keyof LayerEntry, value: string) {
-    setLayers((prev) => prev.map((layer, i) => (i === index ? { ...layer, [field]: value } : layer)));
+    setLayers((prev) => {
+      return prev.map((layer, i) => {
+        if (i !== index) return layer;
+
+        // protect saved notes: if this layer currently references a saved note id
+        // and the user is trying to change its kind away from 'note', block it.
+        if (field === "kind" && layer.kind === "note" && value !== "note") {
+          const noteExists = notes.some((n) => n.id === layer.value);
+          if (noteExists) {
+            try {
+              // Use confirm so the user can intentionally override; default is to block.
+              const ok = window.confirm(
+                "This layer references a saved note. Changing the kind will detach it. Proceed?"
+              );
+              if (!ok) return layer;
+            } catch {
+              return layer;
+            }
+          }
+        }
+
+        return { ...layer, [field]: value } as LayerEntry;
+      });
+    });
+  }
+
+  // Notes helpers
+  function createNote(title: string, body: string) {
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const note: Note = { id, title: title || "Untitled", body, createdAt: Date.now() };
+    setNotes((prev) => [note, ...prev]);
+    return note;
+  }
+
+  function deleteNote(id: string) {
+    setNotes((prev) => prev.filter((n) => n.id !== id));
+    // remove any layer references to this note
+    setLayers((prev) => prev.filter((l) => !(l.kind === "note" && l.value === id)));
+  }
+
+  function addNoteAsLayer(id: string) {
+    // only add if not already present
+    setLayers((prev) => {
+      if (prev.some((p) => p.kind === "note" && p.value === id)) return prev;
+      return [...prev, { kind: "note", value: id } as LayerEntry];
+    });
+  }
+
+  function attachNoteToQuery(id: string) {
+    const note = notes.find((n) => n.id === id);
+    if (!note) return;
+    setQuery((prev) => (prev ? `${prev}\n\n${note.body}` : note.body));
+    // resize textarea
+    setTimeout(() => handleQueryChange((queryRef.current?.value ?? "") as string), 0);
   }
 
   function currentModelOptions(): string[] {
@@ -226,7 +432,7 @@ export default function Home() {
       .map((layer) => {
         const value = layer.value.trim();
         if (!value) return null;
-        const label = layerName(pathCount);
+        const label = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : layerName(pathCount);
         pathCount += 1;
         return { path: value, label };
       })
@@ -238,9 +444,32 @@ export default function Home() {
         const value = layer.value.trim();
         if (!value) return null;
         urlCount += 1;
-        return { url: value, label: `URL ${urlCount}` };
+        const label = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : `URL ${urlCount}`;
+        return { url: value, label };
       })
       .filter((u): u is { url: string; label: string } => !!u);
+
+    // include notes payload: expand note layer references to their content
+    let noteCount = 0;
+    const payloadNotes = layers
+      .filter((layer) => layer.kind === "note")
+      .map((layer, i) => {
+        const value = layer.value.trim();
+        // title comes from the editable label (preferred) or from the layer.value for backwards compatibility
+        const title = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : (value || `Note ${i + 1}`);
+        // try to find a saved note by id
+        const found = notes.find((n) => n.id === value);
+        if (found) {
+          noteCount += 1;
+          const label = title || (found.title || `Note ${noteCount}`);
+          return { id: found.id, title: found.title, body: found.body, label };
+        }
+        // unsaved note: send empty body but include title so AI sees the title as the layer name
+        noteCount += 1;
+        const label = title || `Note ${noteCount}`;
+        return { id: `unsaved-${i}-${Date.now()}`, title: label, body: "", label };
+      })
+      .filter((n) => n !== null) as { id: string; title: string; body: string; label?: string }[];
 
     try {
       const response = await fetch("/api/chat", {
@@ -252,6 +481,7 @@ export default function Home() {
           model: currentModel(),
           layers: payloadLayers.length > 0 ? payloadLayers : undefined,
           urls: payloadUrls.length > 0 ? payloadUrls : undefined,
+          notes: payloadNotes.length > 0 ? payloadNotes : undefined,
           stream: true,
         }),
       });
@@ -344,14 +574,18 @@ export default function Home() {
                   <h2 className="text-sm font-semibold tracking-wide">Layers</h2>
                   <p className="mt-1 text-xs text-muted-foreground">Attach local file paths or scrape URLs as context.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={addLayer}
-                  className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium transition-colors duration-300 ease-in-out hover:bg-muted"
-                >
-                  <FiPlus className="h-4 w-4" />
-                  Add item
-                </button>
+                <div className="inline-flex items-center gap-2">
+                  <button type="button" onClick={addPathLayer} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium hover:bg-muted">
+                    <FiPlus className="h-4 w-4" />
+                    Add path
+                  </button>
+                  <button type="button" onClick={addUrlLayer} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium hover:bg-muted">
+                    Add URL
+                  </button>
+                  <button type="button" onClick={addNoteLayer} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium hover:bg-muted">
+                    Add note
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-3" suppressHydrationWarning>
@@ -360,54 +594,88 @@ export default function Home() {
                 ) : (
                   <>
                     {layers.length === 0 ? (
-                      <div className="rounded-lg border border-dashed border-muted bg-background/80 p-6 text-center text-sm text-muted-foreground">
-                        No context items yet. Add your first path or URL.
-                      </div>
+                      <div className="rounded-lg border border-dashed border-muted bg-background/80 p-6 text-center text-sm text-muted-foreground">No context items yet. Add your first path or URL.</div>
                     ) : (
-                      layers.map((layer, index) => (
-                        <div key={index} className="space-y-3 rounded-xl border border-muted bg-background/90 p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{layerName(index)}</div>
-                            <button
-                              type="button"
-                              onClick={() => removeLayer(index)}
-                              title="Delete layer"
-                              aria-label="Delete layer"
-                              className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm text-destructive transition-colors duration-300 ease-in-out hover:bg-destructive/10"
-                            >
-                              <FiTrash2 className="h-4 w-4" />
-                              Remove
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr] sm:items-center">
-                            <div className="inline-flex rounded-lg border border-muted bg-muted/40 p-1">
-                              <button
-                                type="button"
-                                onClick={() => updateLayer(index, "kind", "path")}
-                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${layer.kind === "path" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                              >
-                                Path
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => updateLayer(index, "kind", "url")}
-                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${layer.kind === "url" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                              >
-                                URL
-                              </button>
+                      <div className="grid grid-cols-3 gap-4">
+                        {/* Left: titles list */}
+                        <div className="col-span-1 space-y-2">
+                          {layers.map((layer, index) => (
+                            <div key={index} onClick={() => setSelectedLayerIndex(index)} className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-accent/40 bg-muted/40" : "border-transparent hover:bg-muted/40 transition-colors duration-300"}`}>
+                              <div className="flex-1 text-sm font-medium">
+                                {editingTitleIndex === index ? (
+                                  <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                    <input value={editingTitleValue} onChange={(e) => setEditingTitleValue(e.target.value)} className="flex-1 rounded-md border px-2 py-1 text-sm text-primary-foreground" />
+                                    <div className="ml-1 flex flex-col items-start">
+                                      <button className="text-sm" onClick={(e) => { e.stopPropagation(); saveRename(index); }}>Save</button>
+                                      <button className="text-sm text-destructive mt-1" onClick={(e) => { e.stopPropagation(); cancelRename(); }}>Cancel</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div>{layer.label ?? kindPlaceholder(layers, index, layer.kind)}</div>
+                                )}
+                              </div>
+                              {editingTitleIndex !== index && (
+                                <div className="ml-2 relative">
+                                  <button aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted layer-menu-button"><FiMoreVertical /></button>
+                                  {menuOpenIndex === index && (
+                                    <div className="absolute right-0 mt-2 w-36 rounded-md border bg-card p-0 z-10 overflow-hidden layer-menu">
+                                      <button className="w-full text-left px-3 py-2 text-sm hover:bg-muted rounded-t-md" onClick={() => startRenaming(index)}>Rename</button>
+                                      <button className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-muted rounded-b-md" onClick={() => removeLayer(index)}>Remove</button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-
-                            <input
-                              type={layer.kind === "url" ? "url" : "text"}
-                              value={layer.value}
-                              onChange={(e) => updateLayer(index, "value", e.target.value)}
-                              className="w-full rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                              placeholder={layer.kind === "url" ? "https://example.com/page" : layerPathExample(index)}
-                            />
-                          </div>
+                          ))}
                         </div>
-                      ))
+
+                        {/* Right: detail editor for selected layer */}
+                        <div className="col-span-2">
+                          {layers[selectedLayerIndex] ? (
+                            <div className="space-y-3 rounded-xl border border-muted bg-background/90 px-4 pb-4 pt-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <div className="text-sm font-semibold">{layers[selectedLayerIndex].label ?? kindPlaceholder(layers, selectedLayerIndex, layers[selectedLayerIndex].kind)}</div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                {layers[selectedLayerIndex].kind === "note" ? (
+                                  <div className="flex-1" />
+                                ) : (
+                                  <input type={layers[selectedLayerIndex].kind === "url" ? "url" : "text"} value={layers[selectedLayerIndex].value} onChange={(e) => updateLayer(selectedLayerIndex, "value", e.target.value)} className="flex-1 rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" placeholder={layers[selectedLayerIndex].kind === "url" ? "https://example.com/page" : layerPathExample(selectedLayerIndex)} />
+                                )}
+                              </div>
+
+                              {layers[selectedLayerIndex].kind === "note" ? (
+                                <div className="mt-3 space-y-2">
+                                  <textarea value={((): string => { const note = notes.find((n) => n.id === layers[selectedLayerIndex].value); return note ? note.body : layers[selectedLayerIndex].value; })()} onChange={(e) => updateLayer(selectedLayerIndex, "value", e.target.value)} placeholder="Note body..." className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm min-h-[80px]" />
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button type="button" onClick={() => {
+                                      const content = ((): string => { const note = notes.find((n) => n.id === layers[selectedLayerIndex].value); return note ? note.body : layers[selectedLayerIndex].value; })();
+                                      const title = (typeof layers[selectedLayerIndex].label === "string" && layers[selectedLayerIndex].label!.trim().length > 0) ? layers[selectedLayerIndex].label! : "Untitled";
+                                      const existing = notes.find((n) => n.id === layers[selectedLayerIndex].value);
+                                      if (existing) {
+                                        const updated: Note = { ...existing, title: title || existing.title, body: content };
+                                        setNotes((prev) => prev.map((n) => (n.id === existing.id ? updated : n)));
+                                        updateLayer(selectedLayerIndex, "value", existing.id);
+                                      } else {
+                                        const created = createNote(title, content);
+                                        updateLayer(selectedLayerIndex, "value", created.id);
+                                      }
+                                    }} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-1 text-xs font-medium hover:bg-muted">Save</button>
+                                    <button type="button" onClick={() => {
+                                      const existing = notes.find((n) => n.id === layers[selectedLayerIndex].value);
+                                      if (existing) deleteNote(existing.id);
+                                      updateLayer(selectedLayerIndex, "value", "");
+                                    }} className="text-xs text-destructive">Clear</button>
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
                     )}
                   </>
                 )}
