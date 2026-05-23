@@ -589,7 +589,7 @@ export default function Home() {
                               <div className="flex-1 text-sm font-medium">
                                 {editingTitleIndex === index ? (
                                   <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                                    <input value={editingTitleValue} onChange={(e) => setEditingTitleValue(e.target.value)} className="flex-1 rounded-md border px-2 py-1 text-sm" />
+                                    <input value={editingTitleValue} onChange={(e) => setEditingTitleValue(e.target.value)} className="flex-1 rounded-md border px-2 py-1 text-sm text-primary-foreground" />
                                     <button className="px-2 text-sm" onClick={(e) => { e.stopPropagation(); saveRename(index); }}>Save</button>
                                     <button className="px-2 text-sm text-muted" onClick={(e) => { e.stopPropagation(); cancelRename(); }}>Cancel</button>
                                   </div>
@@ -617,10 +617,6 @@ export default function Home() {
                               <div className="flex items-center justify-between">
                                 <div className="flex-1">
                                   <div className="text-sm font-semibold">{layers[selectedLayerIndex].label ?? kindPlaceholder(layers, selectedLayerIndex, layers[selectedLayerIndex].kind)}</div>
-                                </div>
-
-                                <div className="ml-2 relative">
-                                  {/* right-pane menu removed — editing available only from the left list */}
                                 </div>
                               </div>
 
