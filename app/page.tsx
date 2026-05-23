@@ -384,18 +384,19 @@ export default function Home() {
       .filter((layer) => layer.kind === "note")
       .map((layer, i) => {
         const value = layer.value.trim();
-        if (!value) return null;
+        // title comes from the editable label (preferred) or from the layer.value for backwards compatibility
+        const title = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : (value || `Note ${i + 1}`);
         // try to find a saved note by id
         const found = notes.find((n) => n.id === value);
         if (found) {
           noteCount += 1;
-          const label = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : (found.title || `Note ${noteCount}`);
+          const label = title || (found.title || `Note ${noteCount}`);
           return { id: found.id, title: found.title, body: found.body, label };
         }
-        // fallback: if layer contains unsaved body, send as temporary note
-  noteCount += 1;
-  const label = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : `Note ${noteCount}`;
-  return { id: `unsaved-${i}-${Date.now()}`, title: "Unsaved note", body: value, label };
+        // unsaved note: send empty body but include title so AI sees the title as the layer name
+        noteCount += 1;
+        const label = title || `Note ${noteCount}`;
+        return { id: `unsaved-${i}-${Date.now()}`, title: label, body: "", label };
       })
       .filter((n) => n !== null) as { id: string; title: string; body: string; label?: string }[];
 
@@ -542,16 +543,7 @@ export default function Home() {
                               />
 
                               {layer.kind === "note" ? (
-                                <input
-                                  type="text"
-                                  readOnly
-                                  value={(() => {
-                                    const note = notes.find((n) => n.id === layer.value);
-                                    return note ? note.title || note.body.slice(0, 60) : "Unsaved note";
-                                  })()}
-                                  className="flex-1 rounded-lg border border-muted bg-background/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                                  placeholder="Unsaved note"
-                                />
+                                <div className="flex-1" />
                               ) : (
                                 <input
                                   type={layer.kind === "url" ? "url" : "text"}
@@ -575,26 +567,55 @@ export default function Home() {
                             </div>
                           </div>
 
+                          {/* notes show a compact body editor below the row; title remains the single label field */}
                           {layer.kind === "note" ? (
                             <div className="mt-3 space-y-2">
-                              {/* Inline note editor: title + body. layer.value stores note id or temporary body if not saved */}
-                              <NoteInlineEditor
-                                layerValue={layer.value}
-                                notes={notes}
-                                onSave={(note) => {
-                                  // ensure note is in notes list and layer references the id
-                                  setNotes((prev) => {
-                                    const exists = prev.find((n) => n.id === note.id);
-                                    if (exists) return prev.map((n) => (n.id === note.id ? note : n));
-                                    return [note, ...prev];
-                                  });
-                                  updateLayer(index, "value", note.id);
-                                }}
-                                onDelete={() => {
-                                  // clear layer value
-                                  updateLayer(index, "value", "");
-                                }}
+                              <textarea
+                                value={(() => {
+                                  const note = notes.find((n) => n.id === layer.value);
+                                  return note ? note.body : layer.value;
+                                })()}
+                                onChange={(e) => updateLayer(index, "value", e.target.value)}
+                                placeholder="Note body..."
+                                className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm min-h-[80px]"
                               />
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const content = (() => {
+                                      const note = notes.find((n) => n.id === layer.value);
+                                      return note ? note.body : layer.value;
+                                    })();
+                                    const title = (typeof layer.label === "string" && layer.label.trim().length > 0) ? layer.label : "Untitled";
+                                    const existing = notes.find((n) => n.id === layer.value);
+                                    if (existing) {
+                                      // update existing note
+                                      const updated: Note = { ...existing, title: title || existing.title, body: content };
+                                      setNotes((prev) => prev.map((n) => (n.id === existing.id ? updated : n)));
+                                      updateLayer(index, "value", existing.id);
+                                    } else {
+                                      // create new note and attach
+                                      const created = createNote(title, content);
+                                      updateLayer(index, "value", created.id);
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-1 text-xs font-medium hover:bg-muted"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const existing = notes.find((n) => n.id === layer.value);
+                                    if (existing) deleteNote(existing.id);
+                                    updateLayer(index, "value", "");
+                                  }}
+                                  className="text-xs text-destructive"
+                                >
+                                  Clear
+                                </button>
+                              </div>
                             </div>
                           ) : null}
                         </div>
