@@ -202,7 +202,7 @@ export default function Home() {
   }
 
   function moveLayer(from: number, to: number) {
-    console.debug("moveLayer(candidate)", from, to, { layersLength: layers.length });
+  // moveLayer(from, candidateTo) -- 'to' is the candidate insertion index in the original array
     // 'to' is the candidate insertion index in the original array (0..length)
     // compute adjusted insertion index after removal
     const adj = from < to ? to - 1 : to;
@@ -248,7 +248,9 @@ export default function Home() {
 
   function moveLayerDown(index: number) {
     if (index >= layers.length - 1) return;
-    moveLayer(index, index + 1);
+    // pass candidate insertion index so that final position becomes index+1
+    const candidate = Math.min(layers.length, index + 2);
+    moveLayer(index, candidate);
   }
 
   function startRenaming(index: number) {
@@ -681,7 +683,6 @@ export default function Home() {
                               draggable
                               onDragStart={(e) => {
                                 setDraggingIndex(index);
-                                console.debug("layer:dragstart", index);
                                 try {
                                   e.dataTransfer?.setData("text/plain", String(index));
                                   e.dataTransfer!.effectAllowed = "move";
@@ -696,7 +697,7 @@ export default function Home() {
                                 const offsetY = e.clientY - rect.top;
                                 const position = offsetY < rect.height / 2 ? 'before' : 'after';
                                 // signal that this index is being hovered for drop and whether above/below
-                                console.debug("layer:dragover", index, position);
+                                setDragOverIndex(index);
                                 setDragOverIndex(index);
                                 setDragOverPosition(position);
                               }}
@@ -711,7 +712,7 @@ export default function Home() {
                                 const pos = offsetY < rect.height / 2 ? 'before' : 'after';
                                 // candidate insertion index in the original array
                                 const candidateTo = targetIndex + (pos === 'before' ? 0 : 1);
-                                console.debug("layer:drop", { from, targetIndex, pos, candidateTo });
+                                // perform drop
                                 if (from !== null && from !== undefined) moveLayer(from, candidateTo);
                                 setDraggingIndex(null);
                                 setDragOverIndex(null);
@@ -735,16 +736,15 @@ export default function Home() {
                                     {/* Drop zone at the end to append */}
                                     <div
                                       onDragOver={(e) => {
-                                        e.preventDefault();
-                                        console.debug("layer:dragover-end");
-                                        setDragOverIndex(layers.length - 1);
-                                        setDragOverPosition('after');
-                                      }}
+                                      e.preventDefault();
+                                      setDragOverIndex(layers.length - 1);
+                                      setDragOverPosition('after');
+                                    }}
                                       onDrop={(e) => {
                                         e.preventDefault();
                                         const from = draggingIndex;
                                         const candidateTo = layers.length; // append
-                                        console.debug("layer:drop-end", { from, candidateTo });
+                                        // append drop
                                         if (from !== null && from !== undefined) moveLayer(from, candidateTo);
                                         setDraggingIndex(null);
                                         setDragOverIndex(null);
