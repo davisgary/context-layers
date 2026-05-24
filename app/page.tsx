@@ -161,6 +161,8 @@ export default function Home() {
   const [dynamicModels, setDynamicModels] = useState<{ openai?: string[]; claude?: string[]; ollama?: string[] }>({});
 
   const [layers, setLayers] = useState<LayerEntry[]>([]);
+  // stable keys for list items to avoid React reusing DOM nodes when reordered
+  const [layerKeys, setLayerKeys] = useState<string[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState("");
@@ -173,9 +175,71 @@ export default function Home() {
   const [editingTitleValue, setEditingTitleValue] = useState("");
   // selected layer shown in the right panel
   const [selectedLayerIndex, setSelectedLayerIndex] = useState<number>(0);
+  // drag & drop state for reordering
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [dragOverPosition, setDragOverPosition] = useState<'before' | 'after' | null>(null);
+
+  function genKey() {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  // ensure we have a stable key for every layer; keep keys in sync when layers change
+  useEffect(() => {
+    setLayerKeys((prev) => {
+      if (prev.length === layers.length) return prev;
+      if (prev.length < layers.length) {
+        const next = [...prev];
+        while (next.length < layers.length) next.push(genKey());
+        return next;
+      }
+      return prev.slice(0, layers.length);
+    });
+  }, [layers.length]);
 
   function openMenuFor(index: number) {
     setMenuOpenIndex((p) => (p === index ? null : index));
+  }
+
+  function moveLayer(from: number, to: number) {
+    console.debug("moveLayer", from, to, { layersLength: layers.length });
+    if (from === to) return;
+    setLayers((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next;
+    });
+    // move keys in parallel
+    setLayerKeys((prev) => {
+      const next = [...prev];
+      const [k] = next.splice(from, 1);
+      next.splice(to, 0, k);
+      return next;
+    });
+
+    // adjust selected index
+    setSelectedLayerIndex((cur) => {
+      if (cur === from) return to;
+      // if moving an item earlier and selected is between to..from-1, shift right
+      if (from > to && cur >= to && cur < from) return cur + 1;
+      // if moving an item later and selected is between from+1..to, shift left
+      if (from < to && cur > from && cur <= to) return cur - 1;
+      return cur;
+    });
+
+    // close any open menu
+    setMenuOpenIndex(null);
+  }
+
+  function moveLayerUp(index: number) {
+    if (index <= 0) return;
+    moveLayer(index, index - 1);
+  }
+
+  function moveLayerDown(index: number) {
+    if (index >= layers.length - 1) return;
+    moveLayer(index, index + 1);
   }
 
   function startRenaming(index: number) {
@@ -345,7 +409,10 @@ export default function Home() {
   function deleteNote(id: string) {
     setNotes((prev) => prev.filter((n) => n.id !== id));
     // remove any layer references to this note
-    setLayers((prev) => prev.filter((l) => !(l.kind === "note" && l.value === id)));
+    setLayers((prev) => {
+      const next = prev.filter((l) => !(l.kind === "note" && l.value === id));
+      return next;
+    });
   }
 
   function addNoteAsLayer(id: string) {
@@ -600,15 +667,81 @@ export default function Home() {
                         {/* Left: titles list */}
                         <div className="col-span-1 space-y-2">
                           {layers.map((layer, index) => (
-                            <div key={index} onClick={() => setSelectedLayerIndex(index)} className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-accent/40 bg-muted/40" : "border-transparent hover:bg-muted/40 transition-colors duration-300"}`}>
+                            <div
+                              key={layerKeys[index] ?? index}
+                              draggable
+                              onDragStart={(e) => {
+                                setDraggingIndex(index);
+                                console.debug("layer:dragstart", index);
+                                try {
+                                  e.dataTransfer?.setData("text/plain", String(index));
+                                  e.dataTransfer!.effectAllowed = "move";
+                                } catch {
+                                  // ignore
+                                }
+                              }}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                const target = e.currentTarget as HTMLElement;
+                                const rect = target.getBoundingClientRect();
+                                const offsetY = e.clientY - rect.top;
+                                const position = offsetY < rect.height / 2 ? 'before' : 'after';
+                                // signal that this index is being hovered for drop and whether above/below
+                                console.debug("layer:dragover", index, position);
+                                setDragOverIndex(index);
+                                setDragOverPosition(position);
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                const from = draggingIndex;
+                                const targetIndex = index;
+                                const pos = dragOverPosition ?? 'before';
+                                // candidate insertion index in the original array
+                                const candidateTo = targetIndex + (pos === 'before' ? 0 : 1);
+                                // moveLayer expects 'to' to be the index in the array after removal
+                                const to = (from !== null && from < candidateTo) ? candidateTo - 1 : candidateTo;
+                                console.debug("layer:drop", { from, targetIndex, pos, candidateTo, to });
+                                if (from !== null && from !== undefined) moveLayer(from, to);
+                                setDraggingIndex(null);
+                                setDragOverIndex(null);
+                                setDragOverPosition(null);
+                              }}
+                              onDragEnd={() => {
+                                setDraggingIndex(null);
+                                setDragOverIndex(null);
+                              }}
+                              onClick={() => setSelectedLayerIndex(index)}
+                              className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-accent/40 bg-muted/40" : "border-transparent hover:bg-muted/40 transition-colors duration-300"} ${draggingIndex === index ? "opacity-60" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'before') ? "border-t-2 border-accent/50" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'after') ? "border-b-2 border-accent/50" : ""}`}
+                            >
                               <div className="flex-1 text-sm font-medium">
                                 {editingTitleIndex === index ? (
-                                  <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                                     <input value={editingTitleValue} onChange={(e) => setEditingTitleValue(e.target.value)} className="flex-1 rounded-md border px-2 py-1 text-sm text-primary-foreground" />
                                     <div className="ml-1 flex flex-col items-start">
-                                      <button className="text-sm" onClick={(e) => { e.stopPropagation(); saveRename(index); }}>Save</button>
-                                      <button className="text-sm text-destructive mt-1" onClick={(e) => { e.stopPropagation(); cancelRename(); }}>Cancel</button>
+                                      <button type="button" className="text-sm" onClick={(e) => { e.stopPropagation(); saveRename(index); }}>Save</button>
+                                      <button type="button" className="text-sm text-destructive mt-1" onClick={(e) => { e.stopPropagation(); cancelRename(); }}>Cancel</button>
                                     </div>
+                                    {/* Drop zone at the end to append */}
+                                    <div
+                                      onDragOver={(e) => {
+                                        e.preventDefault();
+                                        console.debug("layer:dragover-end");
+                                        setDragOverIndex(layers.length - 1);
+                                        setDragOverPosition('after');
+                                      }}
+                                      onDrop={(e) => {
+                                        e.preventDefault();
+                                        const from = draggingIndex;
+                                        const candidateTo = layers.length; // append
+                                        const to = (from !== null && from < candidateTo) ? candidateTo - 1 : candidateTo;
+                                        console.debug("layer:drop-end", { from, candidateTo, to });
+                                        if (from !== null && from !== undefined) moveLayer(from, to);
+                                        setDraggingIndex(null);
+                                        setDragOverIndex(null);
+                                        setDragOverPosition(null);
+                                      }}
+                                      className="h-8"
+                                    />
                                   </div>
                                 ) : (
                                   <div>{layer.label ?? kindPlaceholder(layers, index, layer.kind)}</div>
@@ -616,11 +749,13 @@ export default function Home() {
                               </div>
                               {editingTitleIndex !== index && (
                                 <div className="ml-2 relative">
-                                  <button aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted layer-menu-button"><FiMoreVertical /></button>
+                                  <button type="button" aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted layer-menu-button"><FiMoreVertical /></button>
                                   {menuOpenIndex === index && (
-                                    <div className="absolute right-0 mt-2 w-36 rounded-md border bg-card p-0 z-10 overflow-hidden layer-menu">
-                                      <button className="w-full text-left px-3 py-2 text-sm hover:bg-muted rounded-t-md" onClick={() => startRenaming(index)}>Rename</button>
-                                      <button className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-muted rounded-b-md" onClick={() => removeLayer(index)}>Remove</button>
+                                    <div className="absolute right-0 mt-2 w-44 rounded-md border bg-card p-0 z-10 overflow-hidden layer-menu">
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted" onClick={() => startRenaming(index)}>Rename</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted" onClick={() => moveLayerUp(index)} disabled={index === 0}>Reorder up</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted" onClick={() => moveLayerDown(index)} disabled={index === layers.length - 1}>Reorder down</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-muted rounded-b-md" onClick={() => removeLayer(index)}>Remove</button>
                                     </div>
                                   )}
                                 </div>
