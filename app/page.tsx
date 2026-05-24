@@ -202,29 +202,38 @@ export default function Home() {
   }
 
   function moveLayer(from: number, to: number) {
-    console.debug("moveLayer", from, to, { layersLength: layers.length });
-    if (from === to) return;
+    console.debug("moveLayer(candidate)", from, to, { layersLength: layers.length });
+    // 'to' is the candidate insertion index in the original array (0..length)
+    // compute adjusted insertion index after removal
+    const adj = from < to ? to - 1 : to;
+    // no-op checks: inserting into same place
+    if (from === adj) return;
+
     setLayers((prev) => {
       const next = [...prev];
       const [item] = next.splice(from, 1);
-      next.splice(to, 0, item);
+      next.splice(adj, 0, item);
       return next;
     });
+
     // move keys in parallel
     setLayerKeys((prev) => {
       const next = [...prev];
       const [k] = next.splice(from, 1);
-      next.splice(to, 0, k);
+      next.splice(adj, 0, k);
       return next;
     });
 
-    // adjust selected index
+    // adjust selected index using adj
     setSelectedLayerIndex((cur) => {
-      if (cur === from) return to;
-      // if moving an item earlier and selected is between to..from-1, shift right
-      if (from > to && cur >= to && cur < from) return cur + 1;
-      // if moving an item later and selected is between from+1..to, shift left
-      if (from < to && cur > from && cur <= to) return cur - 1;
+      if (cur === from) return adj;
+      if (from < to) {
+        // moved later: items between from+1..adj inclusive shift left
+        if (cur > from && cur <= adj) return cur - 1;
+      } else {
+        // moved earlier: items between adj..from-1 inclusive shift right
+        if (cur >= adj && cur < from) return cur + 1;
+      }
       return cur;
     });
 
@@ -695,13 +704,15 @@ export default function Home() {
                                 e.preventDefault();
                                 const from = draggingIndex;
                                 const targetIndex = index;
-                                const pos = dragOverPosition ?? 'before';
+                                // compute before/after based on drop Y position synchronously
+                                const target = e.currentTarget as HTMLElement;
+                                const rect = target.getBoundingClientRect();
+                                const offsetY = e.clientY - rect.top;
+                                const pos = offsetY < rect.height / 2 ? 'before' : 'after';
                                 // candidate insertion index in the original array
                                 const candidateTo = targetIndex + (pos === 'before' ? 0 : 1);
-                                // moveLayer expects 'to' to be the index in the array after removal
-                                const to = (from !== null && from < candidateTo) ? candidateTo - 1 : candidateTo;
-                                console.debug("layer:drop", { from, targetIndex, pos, candidateTo, to });
-                                if (from !== null && from !== undefined) moveLayer(from, to);
+                                console.debug("layer:drop", { from, targetIndex, pos, candidateTo });
+                                if (from !== null && from !== undefined) moveLayer(from, candidateTo);
                                 setDraggingIndex(null);
                                 setDragOverIndex(null);
                                 setDragOverPosition(null);
@@ -733,9 +744,8 @@ export default function Home() {
                                         e.preventDefault();
                                         const from = draggingIndex;
                                         const candidateTo = layers.length; // append
-                                        const to = (from !== null && from < candidateTo) ? candidateTo - 1 : candidateTo;
-                                        console.debug("layer:drop-end", { from, candidateTo, to });
-                                        if (from !== null && from !== undefined) moveLayer(from, to);
+                                        console.debug("layer:drop-end", { from, candidateTo });
+                                        if (from !== null && from !== undefined) moveLayer(from, candidateTo);
                                         setDraggingIndex(null);
                                         setDragOverIndex(null);
                                         setDragOverPosition(null);
