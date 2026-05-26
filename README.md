@@ -94,6 +94,7 @@ npm run dev
 - [ ] Follow-up suggestions — after each model response, generate suggested follow-up prompts or actions (brief & contextual) to help iterate with the model.
 - [ ] Simplifying fills to improve efficiency and reduce tokens — optimize prompt templates and layer concatenation (summarize long layers, use templates, or chunk+retrieve) to lower token use while preserving signal.
 - [ ] Templates for different topics — create a set of starter `.md` templates in `layers/` (e.g., knowledge graphs, data sets, project brief, persona, etc) that users can quickly enable and customize.
+- [ ] Checkboxes for activating/deactivating saved layers.
 - [x] Move/reorder layers — allow users to reorder layers (drag & drop, menu commands like reorder up/down, and keyboard controls), persist the ordering across sessions, and update any links or references between layers when the order changes.
 - [x] Add URL scraping as a data source — implement URL fetching + parsing to turn a web page into one or more layers (fetch HTML, extract main content, convert to Markdown, sanitize), and add field on frontend for a URL.
 - [x] Stream answers — implement streaming model responses so the frontend can render partial output as it's produced, improving response time.
