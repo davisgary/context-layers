@@ -642,8 +642,9 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen">
       <div className="flex-grow flex justify-center px-4 py-10">
-        <div className="w-full max-w-4xl space-y-6">
-          <h1 className="text-center text-3xl font-semibold tracking-tight">Let's go deeper</h1>
+        <div className="w-full max-w-4xl space-y-2">
+          <h1 className="text-center text-3xl font-semibold tracking-tight">Go farther with Context Layers</h1>
+          <p className="text-center text-sm text-muted-foreground pb-3">Create ordered context layers for deeper, more relevant answers.</p>
 
           <form ref={formRef} onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-muted bg-card/90 p-5 shadow-sm">
             <div className="space-y-3 rounded-xl">

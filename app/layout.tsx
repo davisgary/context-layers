@@ -6,14 +6,14 @@ import "../styles/globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
-  title: "Layers",
-  description: "Unlock the power of layers.",
+  title: "Context Layers",
+  description: "Unlock the power of context layers.",
   openGraph: {
     type: "website",
     locale: "en_US",
-    title: "Layers",
+    title: "Context Layers",
     images: ["/meta.png"],
-    siteName: "Layers",
+    siteName: "Context Layers",
   },
 };
 
