@@ -10,13 +10,13 @@ export default function TermsOfService() {
         <h1 className="text-3xl font-bold mb-6">Terms of Service</h1>
 
         <p className="mb-4">
-          Welcome to Layers. By using our platform, you agree to the following terms and conditions. Please read them
+          Welcome to Context Layers. By using our platform, you agree to the following terms and conditions. Please read them
           carefully.
         </p>
 
         <h2 className="text-xl font-semibold mt-8 mb-2">1. Introduction</h2>
         <p className="mb-4">
-          Layers provides tools for large language model integration. These terms govern your use
+          Context Layers provides tools for large language model integration. These terms govern your use
           of our services.
         </p>
 
@@ -34,7 +34,7 @@ export default function TermsOfService() {
 
         <h2 className="text-xl font-semibold mt-6 mb-2">4. Changes to Terms</h2>
         <p className="mb-4">
-          Layers may update these Terms from time to time. Continued use of the platform after changes means you accept
+          Context Layers may update these Terms from time to time. Continued use of the platform after changes means you accept
           the new terms.
         </p>
 

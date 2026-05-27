@@ -1,4 +1,4 @@
-# Layers
+# Context Layers
 
 Provides LLMs with layered context memory for each request, producing deeper, more context-aware responses based on user data. From the frontend, pick a model and it will attach the layers to every request from the file paths you enter.
 

@@ -10,7 +10,7 @@ export default function PrivacyPolicy() {
         <h1 className="text-3xl font-bold mb-6">Privacy Policy</h1>
 
         <p className="mb-4">
-          Your privacy is important to us at Layers. This policy explains how we collect, use, and protect your
+          Your privacy is important to us at Context Layers. This policy explains how we collect, use, and protect your
           information when you use our platform.
         </p>
 
@@ -29,7 +29,7 @@ export default function PrivacyPolicy() {
         <h2 className="text-xl font-semibold mt-6 mb-2">3. Sharing of Information</h2>
         <p className="mb-4">
           We do not sell your personal information. We may share it with trusted service providers as needed to operate
-          Layers (e.g. authentication, hosting).
+          Context Layers (e.g. authentication, hosting).
         </p>
 
         <h2 className="text-xl font-semibold mt-6 mb-2">4. Your Choices</h2>
@@ -40,7 +40,7 @@ export default function PrivacyPolicy() {
 
         <h2 className="text-xl font-semibold mt-6 mb-2">5. Changes to This Policy</h2>
         <p className="mb-4">
-          Layers may update this Privacy Policy. We’ll notify you of significant changes through our website or via email.
+          Context Layers may update this Privacy Policy. We’ll notify you of significant changes through our website or via email.
         </p>
 
         <p className="text-sm text-muted-foreground mt-8">For questions, contact us.</p>
