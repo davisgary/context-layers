@@ -3,15 +3,15 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { FiArrowUp, FiPlus, FiChevronDown, FiLoader, FiTrash2, FiMoreVertical } from "react-icons/fi";
+import { FiArrowUp, FiPlus, FiChevronDown, FiLoader, FiMoreVertical } from "react-icons/fi";
 import Footer from "../components/Footer";
 
 type LayerEntry = { kind: "path" | "url" | "note"; value: string; label?: string };
 
 type Note = { id: string; title: string; body: string; createdAt: number };
 
-const LAYER_STORAGE_KEY = "layers:user-inputs"; // legacy
-const URL_STORAGE_KEY = "layers:url-inputs"; // legacy
+const LAYER_STORAGE_KEY = "layers:user-inputs";
+const URL_STORAGE_KEY = "layers:url-inputs";
 const LAYER_ENTRY_STORAGE_KEY = "layers:entries";
 const NOTES_STORAGE_KEY = "layers:notes";
 
@@ -104,46 +104,6 @@ function sanitizeStoredNotes(raw: string | null): Note[] | null {
     if (!id) return null;
     return { id, title, body, createdAt } as Note;
   });
-}
-
-function NoteInlineEditor({
-  layerValue,
-  notes,
-  onSave,
-  onDelete,
-}: {
-  layerValue: string;
-  notes: Note[];
-  onSave: (note: Note) => void;
-  onDelete: () => void;
-}) {
-  const existing = notes.find((n) => n.id === layerValue);
-  const [title, setTitle] = useState(existing ? existing.title : "");
-  const [body, setBody] = useState(existing ? existing.body : layerValue || "");
-
-  useEffect(() => {
-    if (existing) {
-      setTitle(existing.title);
-      setBody(existing.body);
-    }
-  }, [layerValue]);
-
-  function save() {
-    const id = existing ? existing.id : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const note: Note = { id, title: title || "Untitled", body, createdAt: existing ? existing.createdAt : Date.now() };
-    onSave(note);
-  }
-
-  return (
-    <div className="space-y-2">
-      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (optional)" className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm" />
-      <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Note body..." className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm min-h-[80px]" />
-      <div className="flex items-center justify-end gap-2">
-        <button type="button" onClick={save} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-1 text-xs font-medium hover:bg-muted">Save</button>
-        <button type="button" onClick={onDelete} className="text-xs text-destructive">Clear</button>
-      </div>
-    </div>
-  );
 }
 
 export default function Home() {
@@ -724,7 +684,7 @@ export default function Home() {
                                 setDragOverIndex(null);
                               }}
                               onClick={() => setSelectedLayerIndex(index)}
-                              className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-accent/40 bg-muted/40" : "border-transparent hover:bg-muted/40 transition-colors duration-300"} ${draggingIndex === index ? "opacity-60" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'before') ? "border-t-2 border-accent/50" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'after') ? "border-b-2 border-accent/50" : ""}`}
+                              className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-transparent bg-muted/20" : "border-transparent hover:bg-muted/30 transition-colors duration-300"} ${draggingIndex === index ? "opacity-60" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'before') ? "border-t-2 border-accent/50" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'after') ? "border-b-2 border-accent/50" : ""}`}
                             >
                               <div className="flex-1 text-sm font-medium">
                                 {editingTitleIndex === index ? (
@@ -760,13 +720,13 @@ export default function Home() {
                               </div>
                               {editingTitleIndex !== index && (
                                 <div className="ml-2 relative">
-                                  <button type="button" aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted layer-menu-button"><FiMoreVertical /></button>
+                                  <button type="button" aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted/50 layer-menu-button"><FiMoreVertical /></button>
                                   {menuOpenIndex === index && (
                                     <div className="absolute right-0 mt-2 w-44 rounded-md border bg-card p-0 z-10 overflow-hidden layer-menu">
-                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted" onClick={() => startRenaming(index)}>Rename</button>
-                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted" onClick={() => moveLayerUp(index)} disabled={index === 0}>Reorder up</button>
-                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted" onClick={() => moveLayerDown(index)} disabled={index === layers.length - 1}>Reorder down</button>
-                                      <button type="button" className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-muted rounded-b-md" onClick={() => removeLayer(index)}>Remove</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50" onClick={() => startRenaming(index)}>Rename</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50" onClick={() => moveLayerUp(index)} disabled={index === 0}>Reorder up</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50" onClick={() => moveLayerDown(index)} disabled={index === layers.length - 1}>Reorder down</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-muted/50 rounded-b-md" onClick={() => removeLayer(index)}>Remove</button>
                                     </div>
                                   )}
                                 </div>
