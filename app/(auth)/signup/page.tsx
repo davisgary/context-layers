@@ -19,12 +19,12 @@ export default function SignUp() {
           href="/"
           className="text-xl font-bold cursor-pointer hover:opacity-80 transition-opacity duration-300"
         >
-          Layers
+          Context Layers
         </Link>
       </div>
       <div className="flex-grow flex flex-col items-center justify-center w-full max-w-sm mx-auto text-center pb-24 lg:pb-44">
         <h1 className="text-3xl font-semibold mb-4 pt-8">Sign up</h1>
-        <p className="text-lg mb-8">to create your Layers account</p>
+        <p className="text-lg mb-8">to create your Context Layers account</p>
         {providers.map((provider) => (
           <button
             key={provider.id}
