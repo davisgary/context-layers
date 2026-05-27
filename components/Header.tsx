@@ -15,7 +15,7 @@ export default function Header() {
         aria-label="Primary Navigation"
       >
         <Link href="/" className="font-semibold tracking-tight cursor-pointer hover:opacity-80 transition-opacity duration-300">
-          Layers
+          Context Layers
         </Link>
         <div className="flex gap-4 items-center">
           {session?.user ? (

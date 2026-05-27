@@ -4,7 +4,7 @@ export default function Footer() {
   return (
     <footer className="w-full">
       <div className="text-xs text-muted-foreground text-center py-4 flex items-center justify-center gap-2 whitespace-nowrap">
-        <span>© {new Date().getFullYear()} Layers. All rights reserved.</span>
+        <span>© {new Date().getFullYear()} Context Layers. All rights reserved.</span>
 
         <Link
           href="/terms-of-service"
