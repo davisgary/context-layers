@@ -90,12 +90,11 @@ npm run dev
 - [ ] Production build with third-party OAuth for LLM integrations. Implement secure per-user OAuth flows so individual users can sign in with their own LLM provider account (do not rely on API keys in env for user access).
 - [ ] Integrate auth — implement user authentication and session management.
 - [ ] Integrate DB — add Postgres (Neon) for users, layers, sessions, and provider tokens.
-- [ ] Make editable .md files — provide an in-app editor to create and edit Markdown layers, and persist edits (either to filesystem or DB-backed storage) with versioning or save history.
 - [ ] Follow-up suggestions — after each model response, generate suggested follow-up prompts or actions (brief & contextual) to help iterate with the model.
 - [ ] Simplifying fills to improve efficiency and reduce tokens — optimize prompt templates and layer concatenation (summarize long layers, use templates, or chunk+retrieve) to lower token use while preserving signal.
 - [ ] Templates for different topics — create a set of starter `.md` templates in `layers/` (e.g., knowledge graphs, data sets, project brief, persona, etc) that users can quickly enable and customize.
 - [ ] Checkboxes for activating/deactivating saved layers.
-- [ ] Context filtering (opt-in) — add a frontend toggle to enable/disable context filtering/trimming per request (goal is to help save on token usage).
+- [ ] Context filtering — add a frontend toggle to enable/disable context filtering/trimming per request (goal is to help save on token usage).
 - [x] Move/reorder layers — allow users to reorder layers (drag & drop, menu commands like reorder up/down, and keyboard controls), persist the ordering across sessions, and update any links or references between layers when the order changes.
 - [x] Make editable .md files — provide an in-app editor to create and edit Markdown layers, and persist edits.
 - [x] Add URL scraping as a data source — implement URL fetching + parsing to turn a web page into one or more layers (fetch HTML, extract main content, convert to Markdown, sanitize), and add field on frontend for a URL.
