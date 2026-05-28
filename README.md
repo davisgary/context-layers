@@ -91,6 +91,7 @@ npm run dev
 - [ ] Integrate auth — implement user authentication and session management.
 - [ ] Integrate DB — add Postgres (Neon) for users, layers, sessions, and provider tokens.
 - [ ] Follow-up suggestions — after each model response, generate suggested follow-up prompts or actions (brief & contextual) to help iterate with the model.
+ - [ ] Conversation mode — allow users to respond to an answer and continue the session as a chat. This will let the app function as a multi-turn chat instead of single Q/A interactions.
 - [ ] Simplifying fills to improve efficiency and reduce tokens — optimize prompt templates and layer concatenation (summarize long layers, use templates, or chunk+retrieve) to lower token use while preserving signal.
 - [ ] Templates for different topics — create a set of starter `.md` templates in `layers/` (e.g., knowledge graphs, data sets, project brief, persona, etc) that users can quickly enable and customize.
 - [ ] Checkboxes for activating/deactivating saved layers.
