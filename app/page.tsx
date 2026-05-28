@@ -131,6 +131,7 @@ export default function Home() {
 
   // menu & rename state
   const [menuOpenIndex, setMenuOpenIndex] = useState<number | null>(null);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [editingTitleIndex, setEditingTitleIndex] = useState<number | null>(null);
   const [editingTitleValue, setEditingTitleValue] = useState("");
   // selected layer shown in the right panel
@@ -244,6 +245,19 @@ export default function Home() {
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [menuOpenIndex]);
+
+  // Close the add-layer dropdown when clicking outside
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (!addMenuOpen) return;
+      const target = e.target as Element | null;
+      if (!target) return;
+      if (target.closest('.add-layer-menu') || target.closest('.add-layer-button')) return;
+      setAddMenuOpen(false);
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [addMenuOpen]);
 
   // Load saved entries on mount (client-only) to avoid SSR/CSR mismatch.
   useEffect(() => {
@@ -613,17 +627,19 @@ export default function Home() {
                   <h2 className="text-sm font-semibold tracking-wide">Layers</h2>
                   <p className="mt-1 text-xs text-muted-foreground">Attach local file paths or scrape URLs as context.</p>
                 </div>
-                <div className="inline-flex items-center gap-2">
-                  <button type="button" onClick={addPathLayer} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium hover:bg-muted">
+                <div className="inline-flex items-center gap-2 relative">
+                  <button type="button" onClick={() => setAddMenuOpen((s) => !s)} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium hover:bg-muted transition-colors duration-300 ease-in-out add-layer-button">
                     <FiPlus className="h-4 w-4" />
-                    Add path
+                    Add layer
+                    <FiChevronDown className="ml-1 h-4 w-4" />
                   </button>
-                  <button type="button" onClick={addUrlLayer} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium hover:bg-muted">
-                    Add URL
-                  </button>
-                  <button type="button" onClick={addNoteLayer} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-xs font-medium hover:bg-muted">
-                    Add note
-                  </button>
+                  {addMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-40 rounded-md border bg-card p-1 z-20 add-layer-menu">
+                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 rounded" onClick={() => { addPathLayer(); setAddMenuOpen(false); }}>Path</button>
+                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 rounded" onClick={() => { addUrlLayer(); setAddMenuOpen(false); }}>URL</button>
+                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 rounded" onClick={() => { addNoteLayer(); setAddMenuOpen(false); }}>Note</button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -755,7 +771,7 @@ export default function Home() {
 
                               {layers[selectedLayerIndex].kind === "note" ? (
                                 <div className="mt-3 space-y-2">
-                                  <textarea value={((): string => { const note = notes.find((n) => n.id === layers[selectedLayerIndex].value); return note ? note.body : layers[selectedLayerIndex].value; })()} onChange={(e) => updateLayer(selectedLayerIndex, "value", e.target.value)} placeholder="Note body..." className="w-full rounded-md border border-muted bg-background px-3 py-2 text-sm min-h-[80px]" />
+                                  <textarea value={((): string => { const note = notes.find((n) => n.id === layers[selectedLayerIndex].value); return note ? note.body : layers[selectedLayerIndex].value; })()} onChange={(e) => updateLayer(selectedLayerIndex, "value", e.target.value)} placeholder="Note body..." className="w-full rounded-lg border border-muted bg-background px-3 py-2 text-sm min-h-[80px] focus:outline-none focus:ring-1 focus:ring-accent" />
                                   <div className="flex items-center justify-end gap-2">
                                     <button type="button" onClick={() => {
                                       const content = ((): string => { const note = notes.find((n) => n.id === layers[selectedLayerIndex].value); return note ? note.body : layers[selectedLayerIndex].value; })();
@@ -769,7 +785,7 @@ export default function Home() {
                                         const created = createNote(title, content);
                                         updateLayer(selectedLayerIndex, "value", created.id);
                                       }
-                                    }} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-1 text-xs font-medium hover:bg-muted">Save</button>
+                                    }} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-1 text-xs font-medium hover:bg-muted transition-colors duration-300 ease-in-out">Save</button>
                                     <button type="button" onClick={() => {
                                       const existing = notes.find((n) => n.id === layers[selectedLayerIndex].value);
                                       if (existing) deleteNote(existing.id);
@@ -832,7 +848,7 @@ export default function Home() {
                   title="Submit"
                   aria-label="Submit"
                   aria-busy={isLoading}
-                  className={`mb-1 absolute bottom-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-lg shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition transform duration-200 ease-out bg-primary text-primary-foreground${query.trim().length > 0 ? " hover:bg-accent-foreground hover:-translate-y-0.5 hover:scale-105 hover:shadow-xl active:scale-95 cursor-pointer" : " cursor-default"}`}
+                  className={`mb-1 absolute bottom-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-lg shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition transform duration-300 ease-out bg-primary text-primary-foreground${query.trim().length > 0 ? " hover:bg-accent-foreground hover:-translate-y-0.5 hover:scale-105 hover:shadow-xl active:scale-95 cursor-pointer" : " cursor-default"}`}
                 >
                   {isLoading ? (
                     <FiLoader className="h-[20px] w-[20px] animate-spin" aria-hidden="true" />
