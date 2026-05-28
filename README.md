@@ -97,6 +97,7 @@ npm run dev
 - [ ] Checkboxes for activating/deactivating saved layers.
 - [ ] Context filtering (opt-in) — add a frontend toggle to enable/disable context filtering/trimming per request (goal is to help save on token usage).
 - [x] Move/reorder layers — allow users to reorder layers (drag & drop, menu commands like reorder up/down, and keyboard controls), persist the ordering across sessions, and update any links or references between layers when the order changes.
+- [x] Make editable .md files — provide an in-app editor to create and edit Markdown layers, and persist edits.
 - [x] Add URL scraping as a data source — implement URL fetching + parsing to turn a web page into one or more layers (fetch HTML, extract main content, convert to Markdown, sanitize), and add field on frontend for a URL.
 - [x] Stream answers — implement streaming model responses so the frontend can render partial output as it's produced, improving response time.
 - [x] Add caching for processed layers — cache preprocessed layer content (summaries, embeddings, or canonicalized chunks) with a TTL and simple invalidation to avoid re-reading and re-tokenizing unchanged files; this will reduce latency, API token usage, and server load.
