@@ -132,6 +132,7 @@ export default function Home() {
   const [loadingText, setLoadingText] = useState("");
   // per-message inline follow-up inputs (keyed by message index)
   const [followUps, setFollowUps] = useState<Record<number, string>>({});
+  const [followUpLoadingIndex, setFollowUpLoadingIndex] = useState<number | null>(null);
   
 
   // menu & rename state
@@ -476,8 +477,12 @@ export default function Home() {
     };
   }, []);
 
-  async function handleSubmit(event?: FormEvent<HTMLFormElement> | null, overrideQuery?: string) {
+  async function handleSubmit(event?: FormEvent<HTMLFormElement> | null, overrideQuery?: string, followUpIndex?: number | null) {
     if (event) event.preventDefault();
+    // track whether this submit came from an inline follow-up; undefined => main query
+    if (typeof followUpIndex === "number") setFollowUpLoadingIndex(followUpIndex);
+    else setFollowUpLoadingIndex(null);
+
     setIsLoading(true);
     setError("");
     setAnswer("");
@@ -619,6 +624,7 @@ export default function Home() {
       setError(submitError instanceof Error ? submitError.message : "Unexpected error.");
     } finally {
       setIsLoading(false);
+      setFollowUpLoadingIndex(null);
     }
   }
 
@@ -932,44 +938,49 @@ export default function Home() {
                           <div className="text-xs text-muted-foreground mb-1">{m.role === "assistant" ? "Assistant" : "System"}</div>
                           <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown></div>
                           {m.role === "assistant" ? (
-                            <div className="mt-3 relative">
-                              <textarea
-                                value={followUps[i] ?? ""}
-                                onChange={(e) => setFollowUps((prev) => ({ ...prev, [i]: e.target.value }))}
-                                onKeyDown={async (e) => {
-                                  if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
+                            <>
+                              <div className="mt-3 relative">
+                                <textarea
+                                  value={followUps[i] ?? ""}
+                                  onChange={(e) => setFollowUps((prev) => ({ ...prev, [i]: e.target.value }))}
+                                  onKeyDown={async (e) => {
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                      e.preventDefault();
+                                      const q = (followUps[i] ?? "").trim();
+                                      if (!q || isLoading) return;
+                                      setFollowUps((prev) => ({ ...prev, [i]: "" }));
+                                      await handleSubmit(null, q, i);
+                                    }
+                                  }}
+                                  placeholder="Ask a follow-up..."
+                                  className="min-h-[44px] w-full resize-none rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                                  rows={2}
+                                  disabled={isLoading}
+                                />
+                                <button
+                                  type="button"
+                                  disabled={isLoading || !(followUps[i] ?? "").trim()}
+                                  onClick={async () => {
                                     const q = (followUps[i] ?? "").trim();
                                     if (!q || isLoading) return;
                                     setFollowUps((prev) => ({ ...prev, [i]: "" }));
-                                    await handleSubmit(null, q);
-                                  }
-                                }}
-                                placeholder="Ask a follow-up..."
-                                className="min-h-[44px] w-full resize-none rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                                rows={2}
-                                disabled={isLoading}
-                              />
-                              <button
-                                type="button"
-                                disabled={isLoading || !(followUps[i] ?? "").trim()}
-                                onClick={async () => {
-                                  const q = (followUps[i] ?? "").trim();
-                                  if (!q || isLoading) return;
-                                  setFollowUps((prev) => ({ ...prev, [i]: "" }));
-                                  await handleSubmit(null, q);
-                                }}
-                                title="Submit follow-up"
-                                aria-label="Submit follow-up"
-                                className={`mb-1 absolute bottom-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-lg shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition transform duration-200 ease-out bg-primary text-primary-foreground ${isLoading ? "opacity-60" : "hover:bg-accent-foreground hover:-translate-y-0.5 hover:scale-105 hover:shadow-lg active:scale-95 cursor-pointer"}`}
-                              >
-                                {isLoading ? (
-                                  <FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />
-                                ) : (
-                                  <FiArrowUp className="h-4 w-4" />
-                                )}
-                              </button>
-                            </div>
+                                    await handleSubmit(null, q, i);
+                                  }}
+                                  title="Submit follow-up"
+                                  aria-label="Submit follow-up"
+                                  className={`mb-1 absolute bottom-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-lg shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition transform duration-200 ease-out bg-primary text-primary-foreground ${isLoading ? "opacity-60" : "hover:bg-accent-foreground hover:-translate-y-0.5 hover:scale-105 hover:shadow-lg active:scale-95 cursor-pointer"}`}
+                                >
+                                  {isLoading ? (
+                                    <FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                  ) : (
+                                    <FiArrowUp className="h-4 w-4" />
+                                  )}
+                                </button>
+                              </div>
+                              {followUpLoadingIndex === i ? (
+                                <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />{loadingText || "Thinking..."}</p>
+                              ) : null}
+                            </>
                           ) : null}
                       </div>
                     )
