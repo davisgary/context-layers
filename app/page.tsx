@@ -935,7 +935,6 @@ export default function Home() {
                       </div>
                     ) : (
                       <div key={`msg-${i}`} className="space-y-2 rounded-lg border border-muted bg-card p-4">
-                          <div className="text-xs text-muted-foreground mb-1">{m.role === "assistant" ? "Assistant" : "System"}</div>
                           <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown></div>
                           {m.role === "assistant" ? (
                             <>
@@ -989,7 +988,6 @@ export default function Home() {
                   {/* show streaming assistant content inline while receiving */}
                   {pendingAssistant ? (
                     <div className="space-y-2 rounded-lg border border-muted bg-card p-4">
-                      <div className="text-xs text-muted-foreground mb-1">Assistant</div>
                       <div className="prose max-w-none text-base break-words text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm]}>{pendingAssistant}</ReactMarkdown></div>
                     </div>
                   ) : null}
