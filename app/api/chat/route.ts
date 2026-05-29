@@ -24,7 +24,8 @@ function buildResponseCacheKey(
   query: string,
   layers?: LayerPathInput[],
   urls?: UrlContextInput[],
-  notes?: Array<{ id: string; title?: string; body?: string; label?: string }>
+  notes?: Array<{ id: string; title?: string; body?: string; label?: string }>,
+  messages?: Array<{ role: string; content: string }>
 ): string {
   const layerKey = layers?.map((layer) => ({
     path: layer.path,
@@ -35,6 +36,7 @@ function buildResponseCacheKey(
     label: url.label,
   }));
   const noteKey = notes?.map((n) => ({ id: n.id, title: n.title, body: n.body, label: n.label }));
+  const messagesKey = messages?.map((m) => ({ role: m.role, content: m.content }));
   return JSON.stringify({
     source,
     model,
@@ -42,6 +44,19 @@ function buildResponseCacheKey(
     layers: layerKey || [],
     urls: urlKey || [],
     notes: noteKey || [],
+    messages: messagesKey || [],
+  });
+}
+
+function parseMessages(input: unknown): Array<{ role: string; content: string }> | undefined {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input)) throw new Error("`messages` must be an array when provided.");
+  return input.map((item, index) => {
+    if (!item || typeof item !== "object") throw new Error(`messages[${index}] must be an object.`);
+    const rec = item as Record<string, unknown>;
+    const role = typeof rec.role === "string" ? rec.role : "user";
+    const content = typeof rec.content === "string" ? rec.content.trim() : "";
+    return { role, content };
   });
 }
 
@@ -90,6 +105,7 @@ export async function POST(request: Request) {
       layers?: unknown;
       urls?: unknown;
       notes?: unknown;
+      messages?: unknown;
       source?: unknown;
       model?: unknown;
       stream?: unknown;
@@ -111,6 +127,7 @@ export async function POST(request: Request) {
   const layerInputs = parseLayerInputs(body.layers);
   const urlInputs = parseUrlInputs(body.urls);
   const noteInputs = parseNoteInputs(body.notes);
+  const messageInputs = parseMessages(body.messages);
     const acceptHeader = request.headers.get("accept") || "";
     const wantsStream =
       body.stream !== false &&
@@ -122,7 +139,8 @@ export async function POST(request: Request) {
       query,
       layerInputs,
       urlInputs,
-      noteInputs
+      noteInputs,
+      messageInputs
     );
     const cachedAnswer = getCachedAnswer(cacheKey);
     if (cachedAnswer) {
@@ -158,7 +176,18 @@ export async function POST(request: Request) {
       .map((n) => ({ name: n.label || n.title || "Note", content: (n.body || "").trim() }));
 
     const contexts = [...layerContexts, ...urlContexts, ...noteContexts];
-    const prompt = buildLayeredPrompt(query, contexts);
+    // If message history is provided, fold it into the prompt as prior turns.
+    // Messages are expected as [{ role: 'user'|'assistant'|'system', content: string }, ...]
+    let promptBody = query;
+    if (messageInputs && messageInputs.length > 0) {
+      const history = messageInputs
+        .map((m) => `${m.role === "user" ? "User" : m.role === "assistant" ? "Assistant" : "System"}: ${m.content}`)
+        .join("\n");
+      // Append the current query as the last user turn
+      promptBody = `${history}\nUser: ${query}`;
+    }
+
+    const prompt = buildLayeredPrompt(promptBody, contexts);
     if (!wantsStream) {
       const answer = await generateAnswer(source, prompt, model);
 
