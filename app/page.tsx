@@ -130,6 +130,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
+  // per-message inline follow-up inputs (keyed by message index)
+  const [followUps, setFollowUps] = useState<Record<number, string>>({});
   
 
   // menu & rename state
@@ -877,36 +879,36 @@ export default function Home() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="query" className="block text-sm font-medium">Query</label>
-              <div className="relative">
-                {/* no inline chat history here; conversation is rendered below */}
+                <label htmlFor="query" className="block text-sm font-medium">Query</label>
+                <div className="relative">
+                  {/* no inline chat history here; conversation is rendered below */}
 
-                <textarea ref={queryRef} id="query" value={query} onChange={(e) => handleQueryChange(e.target.value)} onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    if (formRef.current) {
-                      if (typeof formRef.current.requestSubmit === "function") formRef.current.requestSubmit();
-                      else formRef.current.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+                  <textarea ref={queryRef} id="query" value={query} onChange={(e) => handleQueryChange(e.target.value)} onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      if (formRef.current) {
+                        if (typeof formRef.current.requestSubmit === "function") formRef.current.requestSubmit();
+                        else formRef.current.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+                      }
                     }
-                  }
-                }} className="min-h-24 w-full resize-none overflow-hidden rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" placeholder="Ask your question..." required />
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  title="Submit"
-                  aria-label="Submit"
-                  aria-busy={isLoading}
-                  className={`mb-1 absolute bottom-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-lg shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition transform duration-300 ease-out bg-primary text-primary-foreground${query.trim().length > 0 ? " hover:bg-accent-foreground hover:-translate-y-0.5 hover:scale-105 hover:shadow-xl active:scale-95 cursor-pointer" : " cursor-default"}`}
-                >
-                  {isLoading ? (
-                    <FiLoader className="h-[20px] w-[20px] animate-spin" aria-hidden="true" />
-                  ) : (
-                    <FiArrowUp className="h-[20px] w-[20px]" />
-                  )}
-                </button>
+                  }} className="min-h-24 w-full resize-none overflow-hidden rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent" placeholder="Ask your question..." required />
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    title="Submit"
+                    aria-label="Submit"
+                    aria-busy={isLoading}
+                    className={`mb-1 absolute bottom-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-lg shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition transform duration-300 ease-out bg-primary text-primary-foreground${query.trim().length > 0 ? " hover:bg-accent-foreground hover:-translate-y-0.5 hover:scale-105 hover:shadow-xl active:scale-95 cursor-pointer" : " cursor-default"}`}
+                  >
+                    {isLoading ? (
+                      <FiLoader className="h-[20px] w-[20px] animate-spin" aria-hidden="true" />
+                    ) : (
+                      <FiArrowUp className="h-[20px] w-[20px]" />
+                    )}
+                  </button>
+                </div>
+                {isLoading && loadingText ? <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />{loadingText}</p> : null}
               </div>
-              {isLoading && loadingText ? <p className="mt-2 flex items-center gap-2 text-sm text-muted-foreground"><FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />{loadingText}</p> : null}
-            </div>
           </form>
 
           {error ? <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
@@ -927,8 +929,37 @@ export default function Home() {
                       </div>
                     ) : (
                       <div key={`msg-${i}`} className="space-y-2 rounded-lg border border-muted bg-card p-4">
-                        <div className="text-xs text-muted-foreground mb-1">{m.role === "assistant" ? "Assistant" : "System"}</div>
-                        <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown></div>
+                          <div className="text-xs text-muted-foreground mb-1">{m.role === "assistant" ? "Assistant" : "System"}</div>
+                          <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown></div>
+                          {m.role === "assistant" ? (
+                            <div className="mt-3 flex flex-col gap-2">
+                              <textarea
+                                value={followUps[i] ?? ""}
+                                onChange={(e) => setFollowUps((prev) => ({ ...prev, [i]: e.target.value }))}
+                                placeholder="Ask a follow-up..."
+                                className="w-full resize-none rounded-md border border-muted bg-background p-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                                rows={2}
+                                disabled={isLoading}
+                              />
+                              <div className="flex justify-end">
+                                <button
+                                  type="button"
+                                  disabled={isLoading || !(followUps[i] ?? "").trim()}
+                                  onClick={async () => {
+                                    const q = (followUps[i] ?? "").trim();
+                                    if (!q) return;
+                                    // clear the inline field immediately for UX
+                                    setFollowUps((prev) => ({ ...prev, [i]: "" }));
+                                    // submit as a new query but keep current conversation
+                                    await handleSubmit(null, q);
+                                  }}
+                                  className="inline-flex items-center gap-2 rounded-lg border border-muted bg-primary text-primary-foreground px-3 py-1 text-sm disabled:opacity-60"
+                                >
+                                  Ask follow-up
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
                       </div>
                     )
                   ))}
@@ -941,9 +972,7 @@ export default function Home() {
                     </div>
                   ) : null}
 
-                  <div className="mt-2 flex justify-end">
-                    <button type="button" onClick={() => focusQueryForFollowUp()} disabled={isLoading} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-sm font-medium hover:bg-muted transition-colors duration-300 ease-in-out disabled:opacity-60">Ask follow-up</button>
-                  </div>
+                  {/* Inline follow-ups are used under each assistant message; removed global Ask follow-up button. */}
                 </div>
               );
             }
@@ -955,9 +984,7 @@ export default function Home() {
                   <div className="space-y-4 rounded-lg border border-muted bg-card p-6">
                     <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown></div>
                   </div>
-                  <div className="mt-2 flex justify-end">
-                    <button type="button" onClick={() => focusQueryForFollowUp()} disabled={isLoading} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-sm font-medium hover:bg-muted transition-colors duration-300 ease-in-out disabled:opacity-60">Ask follow-up</button>
-                  </div>
+                  {/* Inline follow-ups are used under each assistant message; removed global Ask follow-up button. */}
                 </div>
               );
             }
