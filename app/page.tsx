@@ -917,10 +917,20 @@ export default function Home() {
               return (
                 <div className="space-y-4">
                   {messages.map((m, i) => (
-                    <div key={`msg-${i}`} className="space-y-2 rounded-lg border border-muted bg-card p-4">
-                      <div className="text-xs text-muted-foreground mb-1">{m.role === "assistant" ? "Assistant" : m.role === "system" ? "System" : "You"}</div>
-                      <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown></div>
-                    </div>
+                    m.role === "user" ? (
+                      <div key={`msg-${i}`} className="w-full flex justify-end">
+                        <div className="inline-block space-y-2 rounded-lg bg-background border border-muted text-primary p-4 w-max max-w-[80%] md:max-w-[55%]">
+                          <div className="prose max-w-none text-base break-words text-primary text-right">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div key={`msg-${i}`} className="space-y-2 rounded-lg border border-muted bg-card p-4">
+                        <div className="text-xs text-muted-foreground mb-1">{m.role === "assistant" ? "Assistant" : "System"}</div>
+                        <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown></div>
+                      </div>
+                    )
                   ))}
 
                   {/* show streaming assistant content inline while receiving */}
