@@ -125,9 +125,12 @@ export default function Home() {
   const [layerKeys, setLayerKeys] = useState<string[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [answer, setAnswer] = useState("");
+  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant" | "system"; content: string }>>([]);
+  const [pendingAssistant, setPendingAssistant] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingText, setLoadingText] = useState("");
+  
 
   // menu & rename state
   const [menuOpenIndex, setMenuOpenIndex] = useState<number | null>(null);
@@ -471,11 +474,19 @@ export default function Home() {
     };
   }, []);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleSubmit(event?: FormEvent<HTMLFormElement> | null, overrideQuery?: string) {
+    if (event) event.preventDefault();
     setIsLoading(true);
     setError("");
     setAnswer("");
+    setPendingAssistant("");
+
+    const currentQuery = typeof overrideQuery === "string" ? overrideQuery : query;
+
+    // clear the main query field so the user's text doesn't stay in the textarea
+    setQuery("");
+    // also reset textarea height
+    setTimeout(() => handleQueryChange(""), 0);
 
     let pathCount = 0;
     let urlCount = 0;
@@ -523,17 +534,23 @@ export default function Home() {
       })
       .filter((n) => n !== null) as { id: string; title: string; body: string; label?: string }[];
 
+  // Append the user's turn into the local messages history
+  const userMessage = { role: "user" as const, content: currentQuery };
+  setMessages((prev) => [...prev, userMessage]);
+
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
         body: JSON.stringify({
-          query,
+          query: currentQuery,
           source,
           model: currentModel(),
           layers: payloadLayers.length > 0 ? payloadLayers : undefined,
           urls: payloadUrls.length > 0 ? payloadUrls : undefined,
           notes: payloadNotes.length > 0 ? payloadNotes : undefined,
+          // include full conversation history so server can continue the chat
+          messages: [...messages, userMessage],
           stream: true,
         }),
       });
@@ -554,6 +571,8 @@ export default function Home() {
         const decoder = new TextDecoder();
         let buffer = "";
         let streamError: string | null = null;
+        // local accumulator to avoid reliance on reactive state during streaming
+        let collected = "";
 
         while (true) {
           const { value, done } = await reader.read();
@@ -569,18 +588,31 @@ export default function Home() {
               const data = line.replace(/^data:\s*/, "").trim();
               if (!data) continue;
               const payload = JSON.parse(data) as { delta?: string; done?: boolean; error?: string };
-              if (payload.delta) setAnswer((prev) => prev + payload.delta);
+              if (payload.delta) {
+                collected += payload.delta;
+                setAnswer((prev) => prev + payload.delta);
+                setPendingAssistant((prev) => prev + payload.delta);
+              }
               if (payload.error) streamError = payload.error;
             }
           }
         }
 
         if (streamError) throw new Error(streamError);
+        // commit the fully-collected assistant text into messages so it persists until refresh
+        const finalAssistant = collected.trim();
+        if (finalAssistant) {
+          setMessages((prev) => [...prev, { role: "assistant", content: finalAssistant }]);
+          setAnswer(finalAssistant);
+        }
+        setPendingAssistant("");
         return;
       }
 
-      const data = (await response.json()) as { answer?: string };
-      setAnswer(data.answer ?? "");
+  const data = (await response.json()) as { answer?: string };
+  setAnswer(data.answer ?? "");
+  const finalAssistant = (data.answer ?? "").trim();
+  if (finalAssistant) setMessages((prev) => [...prev, { role: "assistant", content: finalAssistant }]);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unexpected error.");
     } finally {
@@ -612,6 +644,20 @@ export default function Home() {
     textarea.style.height = "0px";
     textarea.style.height = `${textarea.scrollHeight}px`;
   }
+
+  function focusQueryForFollowUp(prefill?: string) {
+    setQuery(prefill ?? "");
+    // give the browser a tick to update the textarea value before focusing/resizing
+    setTimeout(() => {
+      const textarea = queryRef.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+      textarea.style.height = "0px";
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }, 0);
+  }
+
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -833,6 +879,8 @@ export default function Home() {
             <div className="space-y-2">
               <label htmlFor="query" className="block text-sm font-medium">Query</label>
               <div className="relative">
+                {/* no inline chat history here; conversation is rendered below */}
+
                 <textarea ref={queryRef} id="query" value={query} onChange={(e) => handleQueryChange(e.target.value)} onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
@@ -863,11 +911,49 @@ export default function Home() {
 
           {error ? <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
 
-          {answer ? (
-            <div className="space-y-4 rounded-lg border border-muted bg-card p-6">
-              <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown></div>
-            </div>
-          ) : null}
+          {/* Render the conversation in chronological order: user/system/assistant messages */}
+          {(() => {
+            if (messages.length > 0) {
+              return (
+                <div className="space-y-4">
+                  {messages.map((m, i) => (
+                    <div key={`msg-${i}`} className="space-y-2 rounded-lg border border-muted bg-card p-4">
+                      <div className="text-xs text-muted-foreground mb-1">{m.role === "assistant" ? "Assistant" : m.role === "system" ? "System" : "You"}</div>
+                      <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown></div>
+                    </div>
+                  ))}
+
+                  {/* show streaming assistant content inline while receiving */}
+                  {pendingAssistant ? (
+                    <div className="space-y-2 rounded-lg border border-muted bg-card p-4">
+                      <div className="text-xs text-muted-foreground mb-1">Assistant</div>
+                      <div className="prose max-w-none text-base break-words text-foreground"><ReactMarkdown remarkPlugins={[remarkGfm]}>{pendingAssistant}</ReactMarkdown></div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-2 flex justify-end">
+                    <button type="button" onClick={() => focusQueryForFollowUp()} disabled={isLoading} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-sm font-medium hover:bg-muted transition-colors duration-300 ease-in-out disabled:opacity-60">Ask follow-up</button>
+                  </div>
+                </div>
+              );
+            }
+
+            // fallback: no messages yet — show single `answer` block if present
+            if (answer) {
+              return (
+                <div className="space-y-4">
+                  <div className="space-y-4 rounded-lg border border-muted bg-card p-6">
+                    <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{answer}</ReactMarkdown></div>
+                  </div>
+                  <div className="mt-2 flex justify-end">
+                    <button type="button" onClick={() => focusQueryForFollowUp()} disabled={isLoading} className="inline-flex items-center gap-2 rounded-lg border border-muted bg-background px-3 py-2 text-sm font-medium hover:bg-muted transition-colors duration-300 ease-in-out disabled:opacity-60">Ask follow-up</button>
+                  </div>
+                </div>
+              );
+            }
+
+            return null;
+          })()}
         </div>
       </div>
       <Footer />
