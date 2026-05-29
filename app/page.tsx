@@ -932,32 +932,43 @@ export default function Home() {
                           <div className="text-xs text-muted-foreground mb-1">{m.role === "assistant" ? "Assistant" : "System"}</div>
                           <div className="prose max-w-none text-base break-words"><ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown></div>
                           {m.role === "assistant" ? (
-                            <div className="mt-3 flex flex-col gap-2">
+                            <div className="mt-3 relative">
                               <textarea
                                 value={followUps[i] ?? ""}
                                 onChange={(e) => setFollowUps((prev) => ({ ...prev, [i]: e.target.value }))}
+                                onKeyDown={async (e) => {
+                                  if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    const q = (followUps[i] ?? "").trim();
+                                    if (!q || isLoading) return;
+                                    setFollowUps((prev) => ({ ...prev, [i]: "" }));
+                                    await handleSubmit(null, q);
+                                  }
+                                }}
                                 placeholder="Ask a follow-up..."
-                                className="w-full resize-none rounded-md border border-muted bg-background p-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                                className="min-h-[44px] w-full resize-none rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
                                 rows={2}
                                 disabled={isLoading}
                               />
-                              <div className="flex justify-end">
-                                <button
-                                  type="button"
-                                  disabled={isLoading || !(followUps[i] ?? "").trim()}
-                                  onClick={async () => {
-                                    const q = (followUps[i] ?? "").trim();
-                                    if (!q) return;
-                                    // clear the inline field immediately for UX
-                                    setFollowUps((prev) => ({ ...prev, [i]: "" }));
-                                    // submit as a new query but keep current conversation
-                                    await handleSubmit(null, q);
-                                  }}
-                                  className="inline-flex items-center gap-2 rounded-lg border border-muted bg-primary text-primary-foreground px-3 py-1 text-sm disabled:opacity-60"
-                                >
-                                  Ask follow-up
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                disabled={isLoading || !(followUps[i] ?? "").trim()}
+                                onClick={async () => {
+                                  const q = (followUps[i] ?? "").trim();
+                                  if (!q || isLoading) return;
+                                  setFollowUps((prev) => ({ ...prev, [i]: "" }));
+                                  await handleSubmit(null, q);
+                                }}
+                                title="Submit follow-up"
+                                aria-label="Submit follow-up"
+                                className={`mb-1 absolute bottom-2 right-2 inline-flex h-9 w-9 items-center justify-center rounded-lg shadow-md disabled:opacity-60 disabled:cursor-not-allowed transition transform duration-200 ease-out bg-primary text-primary-foreground ${isLoading ? "opacity-60" : "hover:bg-accent-foreground hover:-translate-y-0.5 hover:scale-105 hover:shadow-lg active:scale-95 cursor-pointer"}`}
+                              >
+                                {isLoading ? (
+                                  <FiLoader className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                ) : (
+                                  <FiArrowUp className="h-4 w-4" />
+                                )}
+                              </button>
                             </div>
                           ) : null}
                       </div>
