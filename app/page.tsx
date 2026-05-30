@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 import { FiArrowUp, FiPlus, FiChevronDown, FiLoader, FiMoreVertical } from "react-icons/fi";
 import Footer from "../components/Footer";
 
-type LayerEntry = { kind: "path" | "url" | "note"; value: string; label?: string };
+type LayerEntry = { kind: "path" | "url" | "note"; value: string; label?: string; enabled?: boolean };
 
 type Note = { id: string; title: string; body: string; createdAt: number };
 
@@ -91,7 +91,8 @@ function sanitizeStoredEntries(raw: string | null): LayerEntry[] | null {
     const value = typeof record.value === "string" ? record.value.trim() : "";
     if (!value) return null;
     const label = typeof record.label === "string" ? record.label.trim() : undefined;
-    return { kind: kind as LayerEntry["kind"], value, label };
+    const enabled = typeof record.enabled === "boolean" ? record.enabled : true;
+    return { kind: kind as LayerEntry["kind"], value, label, enabled };
   });
 }
 
@@ -282,17 +283,17 @@ export default function Home() {
       const paths = sanitizeStoredLayers(localStorage.getItem(LAYER_STORAGE_KEY)) || [];
       const urls = sanitizeStoredUrls(localStorage.getItem(URL_STORAGE_KEY)) || [];
       const merged: LayerEntry[] = [];
-      merged.push(...paths.map((p, i) => ({ kind: "path" as const, value: p.path, label: p.label ?? layerName(i) })));
-      merged.push(...urls.map((u, i) => ({ kind: "url" as const, value: u.url, label: u.label ?? undefined })));
+  merged.push(...paths.map((p, i) => ({ kind: "path" as const, value: p.path, label: p.label ?? layerName(i), enabled: true })));
+  merged.push(...urls.map((u, i) => ({ kind: "url" as const, value: u.url, label: u.label ?? undefined, enabled: true })));
       if (merged.length > 0) {
         setLayers(merged);
         return;
       }
 
       // seed a single empty path entry when there are no saved entries
-      setLayers([{ kind: "path", value: "", label: layerName(0) }]);
+  setLayers([{ kind: "path", value: "", label: layerName(0), enabled: true }]);
     } catch {
-      setLayers([{ kind: "path", value: "", label: layerName(0) }]);
+  setLayers([{ kind: "path", value: "", label: layerName(0), enabled: true }]);
     }
   }, []);
 
@@ -325,7 +326,7 @@ export default function Home() {
   // add/remove helpers now manage selection for single-pane view
   function addPathLayer() {
     setLayers((prev) => {
-      const next = [...prev, ({ kind: "path", value: "", label: layerName(prev.filter((l) => l.kind === "path").length) } as LayerEntry)];
+      const next = [...prev, ({ kind: "path", value: "", label: layerName(prev.filter((l) => l.kind === "path").length), enabled: true } as LayerEntry)];
       setSelectedLayerIndex(next.length - 1);
       return next;
     });
@@ -333,7 +334,7 @@ export default function Home() {
 
   function addUrlLayer() {
     setLayers((prev) => {
-      const next = [...prev, ({ kind: "url", value: "", label: undefined } as LayerEntry)];
+      const next = [...prev, ({ kind: "url", value: "", label: undefined, enabled: true } as LayerEntry)];
       setSelectedLayerIndex(next.length - 1);
       return next;
     });
@@ -341,7 +342,7 @@ export default function Home() {
 
   function addNoteLayer() {
     setLayers((prev) => {
-      const next = [...prev, ({ kind: "note", value: "", label: undefined } as LayerEntry)];
+      const next = [...prev, ({ kind: "note", value: "", label: undefined, enabled: true } as LayerEntry)];
       setSelectedLayerIndex(next.length - 1);
       return next;
     });
@@ -362,7 +363,7 @@ export default function Home() {
     });
   }
 
-  function updateLayer(index: number, field: keyof LayerEntry, value: string) {
+  function updateLayer(index: number, field: keyof LayerEntry, value: LayerEntry[keyof LayerEntry]) {
     setLayers((prev) => {
       return prev.map((layer, i) => {
         if (i !== index) return layer;
@@ -498,7 +499,7 @@ export default function Home() {
     let pathCount = 0;
     let urlCount = 0;
     const payloadLayers = layers
-      .filter((layer) => layer.kind === "path")
+      .filter((layer) => layer.kind === "path" && layer.enabled !== false)
       .map((layer) => {
         const value = layer.value.trim();
         if (!value) return null;
@@ -509,7 +510,7 @@ export default function Home() {
       .filter((l): l is { path: string; label: string } => !!l);
 
     const payloadUrls = layers
-      .filter((layer) => layer.kind === "url")
+      .filter((layer) => layer.kind === "url" && layer.enabled !== false)
       .map((layer) => {
         const value = layer.value.trim();
         if (!value) return null;
@@ -522,7 +523,7 @@ export default function Home() {
     // include notes payload: expand note layer references to their content
     let noteCount = 0;
     const payloadNotes = layers
-      .filter((layer) => layer.kind === "note")
+      .filter((layer) => layer.kind === "note" && layer.enabled !== false)
       .map((layer, i) => {
         const value = layer.value.trim();
         // title comes from the editable label (preferred) or from the layer.value for backwards compatibility
@@ -754,7 +755,7 @@ export default function Home() {
                                 setDragOverIndex(null);
                               }}
                               onClick={() => setSelectedLayerIndex(index)}
-                              className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-transparent bg-muted/20" : "border-transparent hover:bg-muted/30 transition-colors duration-300"} ${draggingIndex === index ? "opacity-60" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'before') ? "border-t-2 border-accent/50" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'after') ? "border-b-2 border-accent/50" : ""}`}
+                              className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-transparent bg-muted/20" : "border-transparent hover:bg-muted/30 transition-colors duration-300"} ${draggingIndex === index ? "opacity-60" : ""} ${layer.enabled === false ? "opacity-60" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'before') ? "border-t-2 border-accent/50" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'after') ? "border-b-2 border-accent/50" : ""}`}
                             >
                               <div className="flex-1 text-sm font-medium">
                                 {editingTitleIndex === index ? (
@@ -785,7 +786,10 @@ export default function Home() {
                                     />
                                   </div>
                                 ) : (
-                                  <div>{layer.label ?? kindPlaceholder(layers, index, layer.kind)}</div>
+                                  <div className="flex items-center gap-2">
+                                    <span>{layer.label ?? kindPlaceholder(layers, index, layer.kind)}</span>
+                                    {layer.enabled === false ? <span className="rounded-full border border-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">Inactive</span> : null}
+                                  </div>
                                 )}
                               </div>
                               {editingTitleIndex !== index && (
@@ -813,7 +817,25 @@ export default function Home() {
                                 <div className="flex-1">
                                   <div className="text-sm font-semibold">{layers[selectedLayerIndex].label ?? kindPlaceholder(layers, selectedLayerIndex, layers[selectedLayerIndex].kind)}</div>
                                 </div>
+                                <div className="flex items-center gap-2">
+                                  <label htmlFor="layer-status" className="text-xs text-muted-foreground">Status</label>
+                                  <div className="relative">
+                                    <select
+                                      id="layer-status"
+                                      value={layers[selectedLayerIndex].enabled === false ? "inactive" : "active"}
+                                      onChange={(e) => updateLayer(selectedLayerIndex, "enabled", e.target.value === "active")}
+                                      className="appearance-none rounded-md border border-muted bg-background px-2 pr-8 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                                    >
+                                      <option value="active">Active</option>
+                                      <option value="inactive">Inactive</option>
+                                    </select>
+                                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-muted-foreground">
+                                      <FiChevronDown className="h-3 w-3" />
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
+                              <p className="text-xs text-muted-foreground">Inactive layers won’t be sent with your request.</p>
 
                               <div className="flex items-center gap-3">
                                 {layers[selectedLayerIndex].kind === "note" ? (
