@@ -755,7 +755,9 @@ export default function Home() {
                                 setDragOverIndex(null);
                               }}
                               onClick={() => setSelectedLayerIndex(index)}
-                              className={`flex items-center justify-between cursor-pointer rounded-md border p-2 ${selectedLayerIndex === index ? "border-transparent bg-muted/20" : "border-transparent hover:bg-muted/30 transition-colors duration-300"} ${draggingIndex === index ? "opacity-60" : ""} ${layer.enabled === false ? "opacity-60" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'before') ? "border-t-2 border-accent/50" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'after') ? "border-b-2 border-accent/50" : ""}`}
+                              tabIndex={0}
+                              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedLayerIndex(index); } }}
+                              className={`flex items-center justify-between cursor-pointer rounded-lg border border-muted bg-background px-3 py-2.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent ${selectedLayerIndex === index ? "ring-1 ring-accent bg-muted/20" : "hover:bg-muted/30 transition-colors duration-300"} ${draggingIndex === index ? "opacity-60" : ""} ${layer.enabled === false ? "opacity-60" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'before') ? "border-t-2 border-accent/50" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'after') ? "border-b-2 border-accent/50" : ""}`}
                             >
                               <div className="flex-1 text-sm font-medium">
                                 {editingTitleIndex === index ? (
