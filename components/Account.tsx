@@ -65,7 +65,7 @@ export default function Account() {
                 signOut();
                 setDropdownOpen(false);
               }}
-              className="flex items-center gap-2 w-full text-left px-4 py-3 rounded-t-md font-semibold hover:bg-primary/10 transition duration-300 ease-in-out"
+              className="flex items-center gap-2 w-full text-left px-4 py-3 rounded-t-md font-semibold hover:bg-muted transition duration-300 ease-in-out"
              >
               <TbLogout2 className="h-4 w-4" />
               Sign out
@@ -75,7 +75,7 @@ export default function Account() {
                 setDeleteModalOpen(true);
                 setDropdownOpen(false);
               }}
-              className="flex items-center gap-2 w-full text-left px-4 py-3 rounded-b-md border-t border-primary/20 font-semibold text-destructive hover:bg-primary/10 transition duration-300 ease-in-out"
+              className="flex items-center gap-2 w-full text-left px-4 py-3 rounded-b-md border-t border-primary/20 font-semibold text-destructive hover:bg-muted transition duration-300 ease-in-out"
               >
               <TbTrash className="h-4 w-4" />
               Delete account
