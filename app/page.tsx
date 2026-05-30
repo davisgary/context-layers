@@ -689,10 +689,10 @@ export default function Home() {
                     <FiChevronDown className="ml-1 h-4 w-4" />
                   </button>
                   {addMenuOpen && (
-                    <div className="absolute right-0 mt-2 w-40 rounded-md border bg-card p-1 z-20 add-layer-menu">
-                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300 rounded" onClick={() => { addPathLayer(); setAddMenuOpen(false); }}>Path</button>
-                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300 rounded" onClick={() => { addUrlLayer(); setAddMenuOpen(false); }}>URL</button>
-                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300 rounded" onClick={() => { addNoteLayer(); setAddMenuOpen(false); }}>Note</button>
+                    <div className="absolute right-0 mt-2 w-40 rounded-md border bg-card p-0 z-20 add-layer-menu">
+                      <button type="button" className="block w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300 first:rounded-t-md last:rounded-b-md" onClick={() => { addPathLayer(); setAddMenuOpen(false); }}>Path</button>
+                      <button type="button" className="block w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300 first:rounded-t-md last:rounded-b-md" onClick={() => { addUrlLayer(); setAddMenuOpen(false); }}>URL</button>
+                      <button type="button" className="block w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300 first:rounded-t-md last:rounded-b-md" onClick={() => { addNoteLayer(); setAddMenuOpen(false); }}>Note</button>
                     </div>
                   )}
                 </div>
@@ -757,7 +757,7 @@ export default function Home() {
                               onClick={() => setSelectedLayerIndex(index)}
                               tabIndex={0}
                               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedLayerIndex(index); } }}
-                              className={`flex items-center justify-between cursor-pointer rounded-lg border border-muted bg-background px-3 py-2.5 focus:outline-none focus:border-accent ${selectedLayerIndex === index ? "border-accent bg-muted/20" : "hover:border-accent transition-colors duration-300"} ${draggingIndex === index ? "opacity-60" : ""} ${layer.enabled === false ? "opacity-60" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'before') ? "border-t-2 border-accent/50" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'after') ? "border-b-2 border-accent/50" : ""}`}
+                              className={`flex items-center justify-between cursor-pointer rounded-lg border border-muted bg-background px-3 py-2.5 focus:outline-none focus:border-accent ${selectedLayerIndex === index ? "border-accent" : "hover:border-accent transition-colors duration-300"} ${draggingIndex === index ? "opacity-60" : ""} ${layer.enabled === false ? "opacity-60" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'before') ? "border-t-2 border-accent/50" : ""} ${(dragOverIndex === index && draggingIndex !== null && draggingIndex !== index && dragOverPosition === 'after') ? "border-b-2 border-accent/50" : ""}`}
                             >
                               <div className="flex-1 text-sm font-medium">
                                 {editingTitleIndex === index ? (
@@ -825,7 +825,7 @@ export default function Home() {
                                       id="layer-status"
                                       value={layers[selectedLayerIndex].enabled === false ? "inactive" : "active"}
                                       onChange={(e) => updateLayer(selectedLayerIndex, "enabled", e.target.value === "active")}
-                                      className="appearance-none rounded-md border border-muted bg-background px-2 pr-8 py-1 text-xs text-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none focus:ring-1 focus:ring-accent"
+                                      className="appearance-none rounded-md border border-muted bg-background px-2 pr-8 py-1 text-xs text-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none"
                                     >
                                       <option value="active">Active</option>
                                       <option value="inactive">Inactive</option>
@@ -842,13 +842,13 @@ export default function Home() {
                                 {layers[selectedLayerIndex].kind === "note" ? (
                                   <div className="flex-1" />
                                 ) : (
-                                  <input type={layers[selectedLayerIndex].kind === "url" ? "url" : "text"} value={layers[selectedLayerIndex].value} onChange={(e) => updateLayer(selectedLayerIndex, "value", e.target.value)} className="flex-1 rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none focus:ring-1 focus:ring-accent" placeholder={layers[selectedLayerIndex].kind === "url" ? "https://example.com/page" : layerPathExample(selectedLayerIndex)} />
+                                  <input type={layers[selectedLayerIndex].kind === "url" ? "url" : "text"} value={layers[selectedLayerIndex].value} onChange={(e) => updateLayer(selectedLayerIndex, "value", e.target.value)} className="flex-1 rounded-lg border border-muted bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none" placeholder={layers[selectedLayerIndex].kind === "url" ? "https://example.com/page" : layerPathExample(selectedLayerIndex)} />
                                 )}
                               </div>
 
                               {layers[selectedLayerIndex].kind === "note" ? (
                                 <div className="mt-3 space-y-2">
-                                  <textarea value={((): string => { const note = notes.find((n) => n.id === layers[selectedLayerIndex].value); return note ? note.body : layers[selectedLayerIndex].value; })()} onChange={(e) => updateLayer(selectedLayerIndex, "value", e.target.value)} placeholder="Note body..." className="w-full rounded-lg border border-muted bg-background px-3 py-2 text-sm min-h-[80px] hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none focus:ring-1 focus:ring-accent" />
+                                  <textarea value={((): string => { const note = notes.find((n) => n.id === layers[selectedLayerIndex].value); return note ? note.body : layers[selectedLayerIndex].value; })()} onChange={(e) => updateLayer(selectedLayerIndex, "value", e.target.value)} placeholder="Note body..." className="w-full rounded-lg border border-muted bg-background px-3 py-2 text-sm min-h-[80px] hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none" />
                                   <div className="flex items-center justify-end gap-2">
                                     <button type="button" onClick={() => {
                                       const content = ((): string => { const note = notes.find((n) => n.id === layers[selectedLayerIndex].value); return note ? note.body : layers[selectedLayerIndex].value; })();
@@ -884,7 +884,7 @@ export default function Home() {
             <div className="space-y-2">
               <label htmlFor="source" className="block text-sm font-medium">AI Source</label>
               <div className="relative">
-                <select id="source" value={source} onChange={(e) => setSource(e.target.value as ChatSource)} className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-12 py-2 text-sm text-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none focus:ring-1 focus:ring-accent">
+                <select id="source" value={source} onChange={(e) => setSource(e.target.value as ChatSource)} className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-12 py-2 text-sm text-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none">
                   <option value="openai">OpenAI API</option>
                   <option value="claude">Claude API</option>
                   <option value="ollama">Ollama</option>
@@ -897,7 +897,7 @@ export default function Home() {
             <div className="space-y-2">
               <label htmlFor="model" className="block text-sm font-medium">Model</label>
               <div className="relative">
-                <select id="model" value={currentModel()} onChange={(e) => updateCurrentModel(e.target.value)} className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-12 py-2 text-sm text-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none focus:ring-1 focus:ring-accent">
+                <select id="model" value={currentModel()} onChange={(e) => updateCurrentModel(e.target.value)} className="w-full appearance-none rounded-md border border-muted bg-background px-3 pr-12 py-2 text-sm text-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none">
                   {(dynamicModels[source] && dynamicModels[source]!.length > 0 ? dynamicModels[source] : currentModelOptions()).map((modelId) => (
                     <option key={modelId} value={modelId}>{modelId}</option>
                   ))}
@@ -920,7 +920,7 @@ export default function Home() {
                         else formRef.current.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
                       }
                     }
-                  }} className="min-h-24 w-full resize-none overflow-hidden rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none focus:ring-1 focus:ring-accent" placeholder="Ask your question..." required />
+                  }} className="min-h-24 w-full resize-none overflow-hidden rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none" placeholder="Ask your question..." required />
                   <button
                     type="submit"
                     disabled={isLoading}
@@ -975,7 +975,7 @@ export default function Home() {
                                     }
                                   }}
                                   placeholder="Ask a follow-up..."
-                                  className="min-h-[44px] w-full resize-none rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none focus:ring-1 focus:ring-accent"
+                                  className="min-h-[44px] w-full resize-none rounded-md border border-muted bg-background p-3 pr-12 text-sm placeholder:text-muted-foreground hover:border-accent focus:border-accent transition-colors duration-300 focus:outline-none"
                                   rows={2}
                                   disabled={isLoading}
                                 />
