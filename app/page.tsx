@@ -818,7 +818,6 @@ export default function Home() {
                                   <div className="text-sm font-semibold">{layers[selectedLayerIndex].label ?? kindPlaceholder(layers, selectedLayerIndex, layers[selectedLayerIndex].kind)}</div>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <label htmlFor="layer-status" className="text-xs text-muted-foreground">Status</label>
                                   <div className="relative">
                                     <select
                                       id="layer-status"
