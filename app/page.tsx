@@ -690,9 +690,9 @@ export default function Home() {
                   </button>
                   {addMenuOpen && (
                     <div className="absolute right-0 mt-2 w-40 rounded-md border bg-card p-1 z-20 add-layer-menu">
-                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 rounded" onClick={() => { addPathLayer(); setAddMenuOpen(false); }}>Path</button>
-                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 rounded" onClick={() => { addUrlLayer(); setAddMenuOpen(false); }}>URL</button>
-                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 rounded" onClick={() => { addNoteLayer(); setAddMenuOpen(false); }}>Note</button>
+                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300 rounded" onClick={() => { addPathLayer(); setAddMenuOpen(false); }}>Path</button>
+                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300 rounded" onClick={() => { addUrlLayer(); setAddMenuOpen(false); }}>URL</button>
+                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300 rounded" onClick={() => { addNoteLayer(); setAddMenuOpen(false); }}>Note</button>
                     </div>
                   )}
                 </div>
@@ -796,13 +796,13 @@ export default function Home() {
                               </div>
                               {editingTitleIndex !== index && (
                                 <div className="ml-2 relative">
-                                  <button type="button" aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted/50 layer-menu-button"><FiMoreVertical /></button>
+                                  <button type="button" aria-label="Layer menu" onClick={(e) => { e.stopPropagation(); openMenuFor(index); }} className="p-1 rounded hover:bg-muted/50 transition-colors duration-300 layer-menu-button"><FiMoreVertical /></button>
                                   {menuOpenIndex === index && (
                                     <div className="absolute right-0 mt-2 w-44 rounded-md border bg-card p-0 z-10 overflow-hidden layer-menu">
-                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50" onClick={() => startRenaming(index)}>Rename</button>
-                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50" onClick={() => moveLayerUp(index)} disabled={index === 0}>Reorder up</button>
-                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50" onClick={() => moveLayerDown(index)} disabled={index === layers.length - 1}>Reorder down</button>
-                                      <button type="button" className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-muted/50 rounded-b-md" onClick={() => removeLayer(index)}>Remove</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300" onClick={() => startRenaming(index)}>Rename</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300" onClick={() => moveLayerUp(index)} disabled={index === 0}>Reorder up</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 transition-colors duration-300" onClick={() => moveLayerDown(index)} disabled={index === layers.length - 1}>Reorder down</button>
+                                      <button type="button" className="w-full text-left px-3 py-2 text-sm text-destructive hover:bg-muted/50 transition-colors duration-300 rounded-b-md" onClick={() => removeLayer(index)}>Remove</button>
                                     </div>
                                   )}
                                 </div>
